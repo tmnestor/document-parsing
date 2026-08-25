@@ -246,10 +246,21 @@ def load_corpus_selection(config_path: Path) -> CorpusSelection:
         The validated selection.
 
     Raises:
-        TierConfigError: The block or either key is missing, a list is empty, or
-            a named family has no tiers declared in this file.
+        TierConfigError: The file does not exist, the block or either key is
+            missing, a list is empty, or a named family has no tiers declared
+            in this file.
     """
-    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    if not config_path.exists():
+        raise _err(
+            f"{config_path.name} does not exist, so there is no 'corpus:' block "
+            "declaring which document types and families a full run covers.",
+            config_path=config_path,
+            key_path="(whole file)",
+            expected=f"a YAML file declaring intake families and their tiers, e.g.\n{_EXAMPLE}",
+            recover="restore config/degradation.yml, or pass --config pointing at it.",
+        )
+
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
 
     block = data.get("corpus")
     if not isinstance(block, dict):
