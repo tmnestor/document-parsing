@@ -568,7 +568,17 @@ def draw_table(block: dict, ctx: RenderContext, y: int) -> int:
             ctx.draw.line([(dx, table_body_start), (dx, y)], fill="black")
 
     if ctx.transcript is not None:
-        assert table_seq is not None  # set above in this same `ctx.transcript is not None` branch
+        if table_seq is None:
+            raise TableError(
+                "Table cannot enclose its cells.\n"
+                "  What:     table_seq is None at table_close, but ctx.transcript was set when "
+                "table_open ran, so table_open should have returned a real seq.\n"
+                f"  Where:    {ctx.layout_path} -> {ctx.layout_id} (a table block's table_close)\n"
+                "  Expected: table_seq to hold the int seq TranscriptRecorder.emit('table_open', "
+                "...) returned.\n"
+                "  Recover:  check that ctx.transcript did not change between table_open and "
+                "table_close, and that the table_open emit() call above still assigns table_seq."
+            )
         ctx.transcript.enclose(table_seq, table_seq)
         ctx.transcript.emit("table_close")
 
