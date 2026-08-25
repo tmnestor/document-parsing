@@ -18,6 +18,8 @@ from pathlib import Path
 
 import yaml
 
+from generators.decoration import strip_decoration_run
+
 REQUIRED_POLICY_KEYS: tuple[str, ...] = (
     "title_style",
     "pair_separator",
@@ -31,7 +33,15 @@ REQUIRED_POLICY_KEYS: tuple[str, ...] = (
     "carry_group_key",
     "block_separator",
     "emphasis",
+    "decoration_glyphs",
+    "decoration_min_run",
 )
+
+# The floor on `decoration_min_run`. At one, a run is a single glyph and every
+# decimal point, hyphen and underscore in the corpus is decoration — which
+# would silently rewrite most amounts. Two is the lowest value that still
+# means "repeated".
+MIN_DECORATION_RUN = 2
 
 # Enum-valued keys, each mapped to every value this serialiser implements. A
 # value outside these is a configuration error, not a silently-ignored setting.
@@ -57,6 +67,8 @@ _EXAMPLES: dict[str, str] = {
     "carry_group_key": "down",
     "block_separator": '"\\n\\n"',
     "emphasis": "none",
+    "decoration_glyphs": '".-_=*"',
+    "decoration_min_run": "4",
 }
 
 # Structural markers: they shape the stream but put nothing in the transcript.
@@ -150,7 +162,61 @@ def load_serialisation_policy(path: Path) -> dict:
                 recover=f"set '{key}:' to a supported value, or implement it in generators/serialise.py.",
             )
 
+    _validate_decoration_rule(policy, path=path, resolved=resolved)
+
     return policy
+
+
+def _validate_decoration_rule(policy: dict, *, path: Path, resolved: Path) -> None:
+    """Check the decoration rule can be compiled into a run pattern.
+
+    Neither key is an enum — any glyph set and any threshold above the floor is
+    a legitimate convention — so they are range-checked rather than matched
+    against a list.
+
+    Args:
+        policy: The policy mapping, already known to declare every required key.
+        path: The path as given, used in the recovery step.
+        resolved: The absolute path, used to locate the file.
+
+    Raises:
+        SerialisationError: A key has the wrong type, or a threshold below
+            `MIN_DECORATION_RUN`.
+    """
+    glyphs = policy["decoration_glyphs"]
+    if not isinstance(glyphs, str) or not glyphs:
+        raise _err(
+            f"'decoration_glyphs' is {glyphs!r}, which is not a non-empty string.",
+            path=resolved,
+            key="decoration_glyphs",
+            expected="the characters a run may be built from, as one string, e.g.\n"
+            '              decoration_glyphs: ".-_=*"',
+            recover=f"set 'decoration_glyphs:' in {path} to a non-empty string of glyphs.",
+        )
+
+    min_run = policy["decoration_min_run"]
+    # `bool` is an `int` in Python. Left to the isinstance check below,
+    # `decoration_min_run: true` would read as a threshold of one and quietly
+    # turn every decimal point in the corpus into decoration.
+    if isinstance(min_run, bool) or not isinstance(min_run, int):
+        raise _err(
+            f"'decoration_min_run' is {min_run!r}, which is not an integer.",
+            path=resolved,
+            key="decoration_min_run",
+            expected="a whole number of consecutive glyphs, e.g.\n              decoration_min_run: 4",
+            recover=f"set 'decoration_min_run:' in {path} to an integer of {MIN_DECORATION_RUN} or more.",
+        )
+
+    if min_run < MIN_DECORATION_RUN:
+        raise _err(
+            f"'decoration_min_run' is {min_run}, below the floor of {MIN_DECORATION_RUN}.",
+            path=resolved,
+            key="decoration_min_run",
+            expected=f"an integer of {MIN_DECORATION_RUN} or more — at one a 'run' is a single "
+            "glyph, so every decimal point and hyphen on the page becomes decoration, e.g.\n"
+            "              decoration_min_run: 4",
+            recover=f"raise 'decoration_min_run:' in {path} to {MIN_DECORATION_RUN} or more.",
+        )
 
 
 def _join_cell(text: str, policy: dict) -> str:
@@ -336,10 +402,19 @@ def serialise(events: list[dict], policy: dict) -> str:
         elif kind == "cell_sub_line":
             # Folded into the cell it belongs to, found by column key so a
             # sub-line under column 2 cannot land on column 0.
+            #
+            # Stripped before the fold, not after: the run is trailing on the
+            # sub-line, and folding first would bury it mid-cell where the
+            # pattern no longer matches.
             key = str(meta.get("column_key", ""))
             if key in row_keys:
                 position = row_keys.index(key)
-                row[position] = f"{row[position]}{policy['cell_sub_line_join']}{text}"
+                content = strip_decoration_run(
+                    str(text or ""),
+                    glyphs=policy["decoration_glyphs"],
+                    min_run=policy["decoration_min_run"],
+                )
+                row[position] = f"{row[position]}{policy['cell_sub_line_join']}{content}"
         elif kind == "row_close":
             table_rows.append((row, row_is_header))
             row, row_keys, row_is_header = [], [], False

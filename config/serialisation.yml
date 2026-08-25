@@ -72,3 +72,36 @@ emphasis: none
 #
 # Set 'none' to record the band as its own row again.
 carry_group_key: down
+
+# A run of repeated glyphs is decoration, and is not recorded — the glyphs are
+# still DRAWN, so the page and every prediction made against it are unchanged.
+# Decided 2026-08-19, after the calibration pass measured the cost of having it
+# both ways: a `rule` with a `fill_char` already emitted nothing, while a dot
+# leader on a table cell — the same device by a different primitive — was
+# captured verbatim. Both halves cost accuracy. Excluded separator rules were
+# transcribed anyway by 3 of 4 systems (gemma-4-12B inserting characters equal
+# to 63% of the transcript on every one of 55 receipts, docling 124%); included
+# dot leaders ran gemma-4-12B away to 128,768 characters on two pages it then
+# could not finish, while InternVL3.5-8B omitted them entirely.
+#
+# The glyph class is narrow on purpose — punctuation used for rules and leaders
+# — so content built from the same characters survives: the hyphen in "5-7
+# business days" and in a statement date range is a single glyph, not a run.
+#
+# THE PROMPT MUST NAME THE SAME GLYPHS, exactly. A glyph listed here but not in
+# config/prompt.md drops ink from the transcript that the model was never told
+# to leave out, and no amount of careful reading recovers it; a glyph named
+# there but missing here penalises a model for obeying. `~` was carried here
+# unstated until 2026-08-25 — it appeared in no layout and no transcript, so
+# removing it changed nothing, but the asymmetry could not be seen from either
+# file alone. tests/test_prompt.py now fails on any difference in either
+# direction.
+decoration_glyphs: ".-_=*"
+
+# How many consecutive glyphs make a run rather than punctuation. Three is
+# punctuation, four is a leader: an ellipsis ("continued...") and a decimal
+# point must survive, a 40-dot leader must not. Two is the floor the loader
+# enforces — at one, every decimal point and hyphen in the corpus would be
+# eaten. The shipped prompt states this threshold, and tests/test_prompt.py
+# fails if the two disagree.
+decoration_min_run: 4
