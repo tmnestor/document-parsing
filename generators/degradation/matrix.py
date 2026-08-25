@@ -95,6 +95,20 @@ def write_matrix(rows: list[dict], exports_dir: Path) -> Path:
             "cannot separate a weak model from one the degradation hurt.",
         )
 
+    for row in rows:
+        if not (exports_dir / row["corpus"]).is_dir():
+            raise _err(
+                f"row '{row['corpus']}' names a directory that does not exist beside "
+                f"the matrix at {exports_dir.resolve()}.",
+                path=exports_dir.resolve(),
+                key=row["corpus"],
+                expected="every corpus a matrix indexes to be a directory beside "
+                f"matrix.jsonl, e.g.\n              {exports_dir.resolve()}/{row['corpus']}",
+                recover="write the matrix into the same directory as the corpora it "
+                "indexes, e.g. pass --out pointing at the corpora's parent, or move "
+                f"{row['corpus']!r} beside the matrix.",
+            )
+
     path = exports_dir / _MATRIX_NAME
     path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
     return path
