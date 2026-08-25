@@ -145,10 +145,33 @@ So a two-line wrapped address is one `text_block` and two `text_span`s. Both
 readings are true, neither is lossy, and the block-level text stays byte-identical
 to what `serialise` emits today.
 
-**This requires capturing the wrap.** `_draw_fitted_text` currently splits a string
-across lines internally and returns only the advanced cursor. It must report the
-lines it drew and their y-offsets. That is the one non-trivial renderer change in
-this subsystem.
+**Spans are captured by the draw proxy, not by the primitives.** `TranscriptDraw`
+already intercepts every `draw.text()` call and asks the recorder whether an event
+authorises it (§8.2's coverage invariant). The same interception yields the span:
+the call carries the position, the string and the font, so the drawn line's box is
+computable there, and `_current_seq` already says which event it belongs to.
+
+This means **no primitive changes and no change to `common.py`'s fit helpers**.
+`draw_fitted_left` loops over `FitResult.lines` calling `draw.text` once per line;
+the proxy sees each one. What was going to be this subsystem's one non-trivial
+renderer change is instead a second responsibility for a wrapper that already
+exists for exactly this reason: "wrapping the surface once covers all of
+`common.py`'s text helpers, which know only a string and a box — too little to
+emit a meaningful event themselves, and therefore exactly where an unnoticed gap
+would open."
+
+**Consequence: boxes are measured from ink, not from region arithmetic.** A block's
+`poly` is the union of its spans' boxes, so it hugs the glyphs rather than spanning
+the layout region. That is what a human annotator draws, and it makes success
+criterion 5 (§11) a tautology rather than a test — the box cannot claim a region
+the ink does not occupy.
+
+The trade-off is real and is accepted: a right-aligned amount in a wide region
+produces a narrow box, while a parser predicting a region-shaped block may claim
+the full width, depressing IoU for a difference that is not a reading error.
+Region-shaped boxes have the opposite failure. Ink-shaped is chosen because it is
+verifiable against the page; region-shaped is only verifiable against the layout
+that produced it.
 
 ## 5. Table structure
 
