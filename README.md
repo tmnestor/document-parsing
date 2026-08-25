@@ -156,7 +156,22 @@ against it are no longer valid.
 
 ## Related
 
-Scoring, parser runners and the calibration-pass analysis live in a separate
-repository. The interface between them is the **exported corpus directory**
-above, not shared code — which is why this repository has no scoring dependency
-and its environment carries no parser.
+Parser runners and the extraction benchmark live in a separate repository. The
+interface between them is the **exported corpus directory** above, not shared
+code.
+
+**Text scoring now lives here**, in `scoring/`, for an internal model comparison
+— one operator, and a second repository would have been coordination overhead
+with no compensating isolation. The isolation that mattered is kept by package
+and environment boundaries instead:
+
+- `scoring/` **never imports `generators/`**. It reads an exported corpus
+  directory and nothing else, so "the interface is the directory" still holds
+  inside one repository. `tests/scoring/test_boundaries.py` enforces this with an
+  AST scan rather than a convention.
+- It runs in its own environment, `docparse-score` (`environment-score.yml`).
+  `docparse` gains no dependency, and still carries no parser — inference runs on
+  the remote GPU host and predictions arrive here as files on disk.
+
+See `docs/superpowers/specs/2026-08-25-degradation-matrix-and-scoring-design.md`
+§3 for why that reversal was made and what replaces it.

@@ -171,7 +171,7 @@ against a reference string. Neither claims the word "parsing" for it.
 | Formula recognition | n/a — no formulas in AU business documents | yes, scored by CDM | no |
 | Reading-order labels | no, explicit non-goal | yes | no |
 | Key information extraction | no, explicit non-goal — separate repo | downstream consumer | **yes, this is the whole point** |
-| Degraded / scanned input | secondary only, via `generators/degradation/` | yes, a core difficulty axis | yes |
+| Degraded / scanned input | yes — a first-class axis: a clean baseline plus six tiers (scan/photo × light/moderate/heavy), indexed by `matrix.jsonl` | yes, a core difficulty axis | yes |
 
 ## 6. Metric map
 
@@ -228,7 +228,11 @@ because neither is what "document parsing" connotes:
    with KIE.
 3. **Say what the number is not comparable to.** The export README already warns
    about corpus vintage; it should also say that a score here is an end-to-end
-   text score, not an OmniDocBench-style composite.
+   text score, not an OmniDocBench-style composite. This became concrete once
+   `scoring/` landed: `report` emits normalised and strict CER, WER, a median and
+   percentiles, and a degenerate count — every one of them a *text* measure. There
+   is no TEDS and no CDM to average in, so a number from this repo cannot be laid
+   beside an OmniDocBench overall score however similar the two look.
 4. **The gap is an opportunity, not only a caveat.** The renderer knows every
    element's box, class and draw order — layout, reading order and table structure
    ground truth are all *already computed* at capture time and simply not emitted.
