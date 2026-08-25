@@ -1,0 +1,14 @@
+name: docparse
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pillow
+  - pyyaml
+  - typer
+  - rich
+  - faker
+  - pytest
+  - pytest-cov
+  - ruff
+  - mypy

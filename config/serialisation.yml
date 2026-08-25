@@ -1,0 +1,74 @@
+# How an event stream becomes a Markdown transcript. This file is the whole
+# convention: reading it should answer what a transcript looks like without
+# consulting Python. Every key is required — the loader fails fast on any
+# omission, including the keys whose value is a no-op.
+
+# `title` events become an ATX H1 heading. Exactly one block per page emits
+# one: a `banner` (the bank mastheads), or a `text` block marked `title: true`
+# (every other layout's own title line). Section sub-heads inside the body stay
+# ordinary paragraphs however large they are printed — "is this line a heading?"
+# has to be answerable from the page, and "the document's title" is, where
+# "anything drawn big and bold" is not.
+title_style: atx_h1
+
+# A `pair` event joins its label and value with this separator...
+pair_separator: ": "
+# ...after stripping any colon the layout already drew on the label, so a
+# layout drawing "Total:" cannot produce "Total:: $137.73".
+pair_strip_trailing_colon: true
+
+# Tables become pipe tables with a header separator row.
+table_style: pipe_with_header_rule
+
+# What an empty cell renders as. This covers two real cases: a column with no
+# value on this row, and a date deliberately blanked because its grouping
+# already carries it. The page shows a blank in both, so the transcript does.
+empty_cell_token: ""
+
+# A table sub-line — a second, smaller line drawn beneath a cell, e.g. a
+# transaction's reference number — is folded into its own cell's text with this
+# joiner. A pipe table cannot express two lines inside one cell, and dropping
+# the sub-line would mean the transcript omits ink that is on the page.
+cell_sub_line_join: " "
+
+# A header label authored across two lines (e.g. "Date of\nTransaction") is
+# joined with this. Same constraint as above: a pipe table cell is one line.
+cell_newline_join: " "
+
+# Split columns serialise column by column in DSL order, left to right, never
+# interleaved by vertical position. This is the one convention competent models
+# genuinely disagree on — a two-column header with the payer left and document
+# metadata right is often read across visual rows instead — and no
+# normalisation can repair an ordering difference, so the shipped prompt must
+# state it.
+split_order: column_major
+
+# What to do when a table drew no column header on the page — several receipt
+# layouts set `header: false`. A pipe table's first row IS its header, so the
+# first line item must not be promoted into that slot: a parser would read the
+# goods as column names. `empty_header_row` emits a blank header instead, which
+# keeps the table parseable without inventing any text the page does not show.
+headerless_table: empty_header_row
+
+# Between top-level blocks.
+block_separator: "\n\n"
+
+# No bold, no italic. The renderer knows exactly what is bold, so emitting `**`
+# is available and tempting — and deliberately not done: bold detection is a
+# typographic judgement models make inconsistently, and scoring it would
+# measure style recognition rather than reading.
+emphasis: none
+
+# A group header — a shaded date band drawn across the full table width, with
+# that day's transactions listed beneath it — is folded into the rows it heads,
+# so every row carries its own date and stands alone.
+#
+# 'down' DEPARTS from recording only what the page shows: the page prints the
+# date once. It is the single place this corpus infers rather than transcribes,
+# and it is deliberate. Recorded literally the band is a table row containing
+# only a date, and no system reproduced it — gemma-4-12B attached the date to
+# the group's first transaction instead and was scored as dropping a row on
+# 100% of those documents, the count matching the date-only rows exactly.
+#
+# Set 'none' to record the band as its own row again.
+carry_group_key: down

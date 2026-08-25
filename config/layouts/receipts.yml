@@ -1,0 +1,337 @@
+# Receipt layouts. Visual DNA lives in the shared `body:` tree below; each
+# layout supplies only what genuinely differs -- page geometry, type size, line
+# pitch, per-field budgets and footer wording.
+#
+# Every primitive parameter a receipt layout must supply a default for, minus
+# the two that are a function of the layout's own line pitch (`line_advance`
+# and `spacer_height`), which each layout declares itself. `validate_layout`'s
+# per-layout coverage check (schema.py) still sees every key explicitly once
+# PyYAML expands `<<:`.
+#
+# Values are the legacy renderer's Python literals, transcribed verbatim:
+# `family: liberation_mono` is `receipt.py`'s `is_mono` (every layout declared
+# `font_family: monospace`), `rule_fill_char: "-"` is `draw_separator`'s
+# default glyph, and `table_header: false` is the fact that the legacy
+# line-item loop drew no column header row at all (receipt.py:259-296),
+# unlike every bank table.
+#
+# Every receipt layout stays monospace. That is not inertia: these layouts are
+# built around a fixed advance width -- `rule_fill_char: "-"` draws separators
+# by repeating a glyph to fill the width, and the narrow thermal pages are
+# sized to a monospace column count. A proportional face would desynchronise
+# both. Liberation Mono is also advance-identical to the DejaVu Sans Mono it
+# replaces, so receipt geometry is unchanged by the swap; only glyph shapes and
+# line height move.
+#
+# Follow-up worth considering separately: `receipt_retail_tax` and
+# `receipt_professional` are not thermal-printer documents in reality and would
+# be more realistic in a proportional face. That is a layout redesign (widths
+# and separators both assume monospace), not a one-line family change.
+_receipt_defaults_values: &receipt_defaults_values
+  role: body
+  color: "black"
+  align: left
+  bold: false
+  family: liberation_mono
+  # Off for every text block but the one that sets `title: true` — the page's
+  # own title, which serialises as the transcript's single H1.
+  text_title: false
+  rule_thickness: 1
+  rule_pad_above: 0
+  rule_pad_below: 0
+  rule_fill_char: "-"
+  pair_value_align: left
+  pair_min_gap: 0
+  # The POS "Date" line's separator. Every right-aligned pair below overrides
+  # it with "": legacy's `draw_line_item` drew those labels with no
+  # punctuation, the amount alone carrying the right-hand column.
+  pair_separator: ": "
+  table_header: false
+  table_header_bold: true
+  table_header_rule_top: true
+  table_header_rule_gap: 16
+  table_row_inset_y: 0
+  table_cell_line_spacing: row_height
+  table_group_gap: 10
+  table_fill_inset: 0
+  table_dividers: []
+  table_offset_y: 0
+  table_sub_line_height: 0
+  banner_text_color: "white"
+  banner_text_y: 0
+  banner_role: body
+  panel_padding: 0
+  panel_border_color: "black"
+  split_gap: 0
+  split_divider_color: "black"
+
+# Every receipt derives the same three sets of off-ground-truth values: the POS
+# detail line (time/register/staff/receipt number), the EFTPOS terminal slip,
+# and the ex-GST subtotal. See generators/layout_dsl/field_providers.py.
+_receipt_field_providers: &receipt_field_providers
+  - {name: receipt_pos, params: {}}
+  - {name: receipt_payment, params: {}}
+  - {name: computed_totals, params: {}}
+
+# All six layouts drew the identical eleven-section sequence in the legacy
+# renderer -- they differed only in the values each layout declares below, so
+# the body itself is shared. Every spacer takes its height from the layout's
+# own `defaults.spacer_height` (legacy's `line_h // 4`), and the line-item
+# table its pitch from the layout's own `row_height` (legacy's `line_h`).
+_receipt_body: &receipt_body
+  # --- merchant header ---------------------------------------------------
+  # The merchant name is the receipt's title — there is no "TAX RECEIPT"
+  # masthead above it, the shop's name is the heading.
+  - {type: text, content: "{SUPPLIER_NAME}", align: center, bold: true,
+     title: true, budget: SUPPLIER_NAME, field: SUPPLIER_NAME}
+  - {type: text, content: "{BUSINESS_ADDRESS}", align: center,
+     budget: BUSINESS_ADDRESS, field: BUSINESS_ADDRESS, when: BUSINESS_ADDRESS}
+  - {type: text, content: "ABN: {BUSINESS_ABN}", align: center,
+     budget: ABN_LINE, field: BUSINESS_ABN, when: BUSINESS_ABN}
+  - {type: spacer}
+  - {type: rule}
+  # --- POS detail --------------------------------------------------------
+  - type: split
+    children:
+      - [{type: pair, label: "Date", value: "{INVOICE_DATE}", field: INVOICE_DATE}]
+      - [{type: text, content: "Time: {POS_TIME}", align: right}]
+  - type: split
+    children:
+      - [{type: text, content: "Reg: {POS_REGISTER}  Staff: {POS_STAFF}"}]
+      - [{type: text, content: "#{RECEIPT_NUMBER}", align: right}]
+  - {type: rule}
+  # --- line items --------------------------------------------------------
+  # `quantity_prefix_format` below concatenates the "2x " marker onto the
+  # description, so it is part of the drawn cell text and reaches a transcript
+  # that way. The predecessor's `prefix_key`/`prefix_field` pair, which
+  # recorded that marker as its own LINE_ITEM_QUANTITIES[i] bounding box, does
+  # not cross: nothing here captures geometry (design §4.2).
+  - type: table
+    rows: receipt_line_items
+    frame: plain
+    grouping: none
+    params:
+      fields: {description: LINE_ITEM_DESCRIPTIONS, quantity: LINE_ITEM_QUANTITIES,
+               price: LINE_ITEM_PRICES, total: LINE_ITEM_TOTAL_PRICES}
+      quantity_prefix_format: "{quantity}x "
+    columns:
+      - {key: description, label: Description, align: left, x: 0,
+         budget: LINE_ITEM_DESC, field: LINE_ITEM_DESCRIPTIONS}
+      - {key: total, label: Amount, align: right, x_right: 0,
+         budget: LINE_ITEM_AMOUNT, currency: plain, field: LINE_ITEM_TOTAL_PRICES}
+  - {type: rule}
+  # --- totals ------------------------------------------------------------
+  # SUBTOTAL is suppressed on its own derived key rather than GST_AMOUNT:
+  # `computed_totals` emits it only when both TOTAL and GST are present, which
+  # is exactly legacy's `if gst and total:` guard.
+  - {type: pair, label: "SUBTOTAL", value: "{SUBTOTAL_AMOUNT}", value_align: right,
+     separator: "", currency: plain, when: SUBTOTAL_AMOUNT}
+  - {type: pair, label: "GST", value: "{GST_AMOUNT}", value_align: right,
+     separator: "", currency: plain, field: GST_AMOUNT, when: GST_AMOUNT}
+  - {type: pair, label: "TOTAL", value: "{TOTAL_AMOUNT}", value_align: right,
+     separator: "", currency: symbol, bold: true, field: TOTAL_AMOUNT}
+  - {type: rule}
+  # --- EFTPOS terminal slip ----------------------------------------------
+  # Three variants, selected entirely by `when:` over the receipt_payment
+  # provider's emits. PAYMENT_AID is the card/wallet discriminator: every
+  # scheme declares an EMV application identifier and a cash payment has none,
+  # so it is NOT_FOUND there and `is_present` treats it as absent.
+  # PAYMENT_WALLET_LABEL additionally marks the wallet variant.
+  - {type: text, content: "CUSTOMER COPY", align: center, bold: true,
+     budget: PAYMENT_ACQUIRER, when: PAYMENT_AID}
+  - {type: text, content: "{PAYMENT_ACQUIRER}", align: center,
+     budget: PAYMENT_ACQUIRER, when: PAYMENT_AID}
+  - {type: spacer, when: PAYMENT_AID}
+  - {type: text, content: "CONTACTLESS - {PAYMENT_WALLET_LABEL}",
+     budget: PAYMENT_LINE, when: PAYMENT_WALLET_LABEL}
+  - {type: text, content: "{PAYMENT_SCHEME_DISPLAY} {PAYMENT_ACCOUNT_TYPE}",
+     budget: PAYMENT_LINE, when: PAYMENT_AID}
+  - {type: text, content: "AID: {PAYMENT_AID}", budget: PAYMENT_LINE, when: PAYMENT_AID}
+  - {type: text, content: "Card: {PAYMENT_MASKED_PAN} {PAYMENT_ENTRY_MODE}",
+     budget: PAYMENT_LINE, when: PAYMENT_AID}
+  - {type: text, content: "PSN: {PAYMENT_PSN}, ATC: {PAYMENT_ATC}",
+     budget: PAYMENT_LINE, when: PAYMENT_AID}
+  - {type: spacer, when: PAYMENT_AID}
+  # Binds {TOTAL_AMOUNT} directly: receipt_payment deliberately emits no
+  # purchase total, so the printed amount can never drift from the scored
+  # field. Three spaces in the label, as legacy printed it.
+  - {type: pair, label: "Purchase   AUD", value: "{TOTAL_AMOUNT}", value_align: right,
+     separator: "", currency: symbol, when: PAYMENT_AID}
+  - {type: text, content: "APPROVED   00", budget: PAYMENT_LINE, when: PAYMENT_AID}
+  - {type: spacer, when: PAYMENT_AID}
+  - {type: text, content: "Terminal ID: {PAYMENT_TERMINAL_ID}",
+     budget: PAYMENT_LINE, when: PAYMENT_AID}
+  - {type: text, content: "Transaction Ref: {PAYMENT_TRANSACTION_REF}",
+     budget: PAYMENT_LINE, when: PAYMENT_AID}
+  - {type: text, content: "{PAYMENT_TIMESTAMP}", budget: PAYMENT_LINE, when: PAYMENT_AID}
+  - {type: spacer, when: PAYMENT_AID}
+  - {type: text, content: "Retain copy for your records", align: center,
+     budget: PAYMENT_ACQUIRER, when: PAYMENT_AID}
+  # Cash variant: the provider already formats both amounts, so neither
+  # carries `currency:`.
+  #
+  # No document in the corpus reaches these two blocks. Every receipt is
+  # linked to a bank transaction, so its scheme comes from the bank row rather
+  # than the weighted pool, and `Cash` carries weight 0 in that pool anyway —
+  # so `PAYMENT_KIND` is never "cash" and the pixel snapshots say nothing
+  # about them. A cash receipt also suppresses every `when: PAYMENT_AID` block
+  # above, collapsing the slip from roughly twenty lines to two, which then
+  # meets the page's crop-to-content height. That collapse is covered instead
+  # by patching the pool and rendering a whole page — see
+  # `test_a_whole_cash_receipt_page_renders_on_every_layout`. Any edit here
+  # is unprotected by the snapshots; run that test.
+  - {type: pair, label: "CASH TENDERED", value: "{PAYMENT_TENDERED}",
+     value_align: right, separator: "", when: PAYMENT_TENDERED}
+  - {type: pair, label: "CHANGE", value: "{PAYMENT_CHANGE}", value_align: right,
+     separator: "", bold: true, when: PAYMENT_CHANGE}
+  - {type: rule}
+  # --- footer ------------------------------------------------------------
+  - {type: spacer}
+  - {type: text, from_layout: footer_text, align: center}
+
+layouts:
+  receipt_thermal_80mm:
+    width: 420
+    margin: 12
+    content_width: 396
+    # Receipts are variable-height: the body is drawn onto a canvas this tall
+    # and cropped to the y the engine returns. Replaces the legacy renderer's
+    # `max_h = 4000` literal.
+    canvas_ceiling: 4000
+    row_height: 20
+    footer_text: "Thank you for shopping with us"
+    font_sizes: {body: 18}
+    defaults:
+      <<: *receipt_defaults_values
+      # Absolute pixels, not int(size * 1.4): a receipt's line pitch is 20px
+      # against an 18pt body, a ratio of 1.11.
+      line_advance: {body: 20}
+      spacer_height: 5              # legacy: line_h // 4
+    field_providers: *receipt_field_providers
+    # Per-field pixel budgets (width = content box = width - 2*margin for centered
+    # header fields; line-item desc/amount derived from geometry). fit_text keeps
+    # content within these losslessly; see docs/fit_safety_design.md.
+    field_budgets:
+      SUPPLIER_NAME: {width: 396, fit: shrink_then_wrap, min_font: 10, max_lines: 2}
+      BUSINESS_ADDRESS: {width: 396, fit: shrink_then_wrap, min_font: 10, max_lines: 2}
+      ABN_LINE: {width: 396, fit: shrink, min_font: 10, max_lines: 1}
+      LINE_ITEM_DESC: {width: 318, fit: shrink, min_font: 10, max_lines: 1}
+      LINE_ITEM_AMOUNT: {width: 70, fit: shrink, min_font: 10, max_lines: 1}
+      PAYMENT_ACQUIRER: {width: 396, fit: shrink, min_font: 8, max_lines: 1}
+      PAYMENT_LINE: {width: 396, fit: shrink, min_font: 8, max_lines: 1}
+    body: *receipt_body
+
+  receipt_thermal_57mm:
+    width: 310
+    margin: 8
+    content_width: 294
+    canvas_ceiling: 4000
+    row_height: 16
+    footer_text: "Thank you"
+    font_sizes: {body: 14}
+    defaults:
+      <<: *receipt_defaults_values
+      line_advance: {body: 16}
+      spacer_height: 4              # legacy: line_h // 4
+    field_providers: *receipt_field_providers
+    field_budgets:
+      SUPPLIER_NAME: {width: 294, fit: shrink_then_wrap, min_font: 10, max_lines: 2}
+      BUSINESS_ADDRESS: {width: 294, fit: shrink_then_wrap, min_font: 10, max_lines: 2}
+      ABN_LINE: {width: 294, fit: shrink, min_font: 10, max_lines: 1}
+      LINE_ITEM_DESC: {width: 234, fit: shrink, min_font: 10, max_lines: 1}
+      LINE_ITEM_AMOUNT: {width: 52, fit: shrink, min_font: 10, max_lines: 1}
+      PAYMENT_ACQUIRER: {width: 294, fit: shrink, min_font: 8, max_lines: 1}
+      PAYMENT_LINE: {width: 294, fit: shrink, min_font: 8, max_lines: 1}
+    body: *receipt_body
+
+  receipt_retail_tax:
+    width: 420
+    margin: 12
+    content_width: 396
+    canvas_ceiling: 4000
+    row_height: 20
+    footer_text: "Thank you for shopping with us"
+    font_sizes: {body: 16}
+    defaults:
+      <<: *receipt_defaults_values
+      line_advance: {body: 20}
+      spacer_height: 5              # legacy: line_h // 4
+    field_providers: *receipt_field_providers
+    field_budgets:
+      SUPPLIER_NAME: {width: 396, fit: shrink_then_wrap, min_font: 10, max_lines: 2}
+      BUSINESS_ADDRESS: {width: 396, fit: shrink_then_wrap, min_font: 10, max_lines: 2}
+      ABN_LINE: {width: 396, fit: shrink, min_font: 10, max_lines: 1}
+      LINE_ITEM_DESC: {width: 324, fit: shrink, min_font: 10, max_lines: 1}
+      LINE_ITEM_AMOUNT: {width: 64, fit: shrink, min_font: 10, max_lines: 1}
+      PAYMENT_ACQUIRER: {width: 396, fit: shrink, min_font: 8, max_lines: 1}
+      PAYMENT_LINE: {width: 396, fit: shrink, min_font: 8, max_lines: 1}
+    body: *receipt_body
+
+  receipt_fuel:
+    width: 420
+    margin: 12
+    content_width: 396
+    canvas_ceiling: 4000
+    row_height: 20
+    footer_text: "Drive safely"
+    font_sizes: {body: 16}
+    defaults:
+      <<: *receipt_defaults_values
+      line_advance: {body: 20}
+      spacer_height: 5              # legacy: line_h // 4
+    field_providers: *receipt_field_providers
+    field_budgets:
+      SUPPLIER_NAME: {width: 396, fit: shrink_then_wrap, min_font: 10, max_lines: 2}
+      BUSINESS_ADDRESS: {width: 396, fit: shrink_then_wrap, min_font: 10, max_lines: 2}
+      ABN_LINE: {width: 396, fit: shrink, min_font: 10, max_lines: 1}
+      LINE_ITEM_DESC: {width: 324, fit: shrink, min_font: 10, max_lines: 1}
+      LINE_ITEM_AMOUNT: {width: 64, fit: shrink, min_font: 10, max_lines: 1}
+      PAYMENT_ACQUIRER: {width: 396, fit: shrink, min_font: 8, max_lines: 1}
+      PAYMENT_LINE: {width: 396, fit: shrink, min_font: 8, max_lines: 1}
+    body: *receipt_body
+
+  receipt_professional:
+    width: 440
+    margin: 12
+    content_width: 416
+    canvas_ceiling: 4000
+    row_height: 20
+    footer_text: "Thank you for your business"
+    font_sizes: {body: 16}
+    defaults:
+      <<: *receipt_defaults_values
+      line_advance: {body: 20}
+      spacer_height: 5              # legacy: line_h // 4
+    field_providers: *receipt_field_providers
+    field_budgets:
+      SUPPLIER_NAME: {width: 416, fit: shrink_then_wrap, min_font: 10, max_lines: 2}
+      BUSINESS_ADDRESS: {width: 416, fit: shrink_then_wrap, min_font: 10, max_lines: 2}
+      ABN_LINE: {width: 416, fit: shrink, min_font: 10, max_lines: 1}
+      LINE_ITEM_DESC: {width: 344, fit: shrink, min_font: 10, max_lines: 1}
+      LINE_ITEM_AMOUNT: {width: 64, fit: shrink, min_font: 10, max_lines: 1}
+      PAYMENT_ACQUIRER: {width: 416, fit: shrink, min_font: 8, max_lines: 1}
+      PAYMENT_LINE: {width: 416, fit: shrink, min_font: 8, max_lines: 1}
+    body: *receipt_body
+
+  receipt_hospitality:
+    width: 440
+    margin: 12
+    content_width: 416
+    canvas_ceiling: 4000
+    row_height: 20
+    footer_text: "Thank you, enjoy your day"
+    font_sizes: {body: 16}
+    defaults:
+      <<: *receipt_defaults_values
+      line_advance: {body: 20}
+      spacer_height: 5              # legacy: line_h // 4
+    field_providers: *receipt_field_providers
+    field_budgets:
+      SUPPLIER_NAME: {width: 416, fit: shrink_then_wrap, min_font: 10, max_lines: 2}
+      BUSINESS_ADDRESS: {width: 416, fit: shrink_then_wrap, min_font: 10, max_lines: 2}
+      ABN_LINE: {width: 416, fit: shrink, min_font: 10, max_lines: 1}
+      LINE_ITEM_DESC: {width: 344, fit: shrink, min_font: 10, max_lines: 1}
+      LINE_ITEM_AMOUNT: {width: 64, fit: shrink, min_font: 10, max_lines: 1}
+      PAYMENT_ACQUIRER: {width: 416, fit: shrink, min_font: 8, max_lines: 1}
+      PAYMENT_LINE: {width: 416, fit: shrink, min_font: 8, max_lines: 1}
+    body: *receipt_body

@@ -1,0 +1,231 @@
+# Image degradation: two intake channels, three severities each.
+#
+# Production receives scanned documents, so the clean-render corpus measures a
+# condition production does not have. This file declares what "degraded" means.
+#
+# TWO LADDERS, NOT ONE. A flatbed or ADF scanner and a phone photograph damage a
+# page in different ways, and merging them into a single severity scale makes
+# "which intake channel breaks it?" unanswerable. Each family is its own ladder;
+# a result is attributed to the channel that produced it.
+#
+#   scan   flatbed / ADF: lamp falloff, roller streaks, sensor noise, small
+#          skew, halftone thresholding, compression. NO perspective and NO cast
+#          shadow -- the platen holds the page flat and square.
+#   photo  phone on a desk: perspective foreshortening, rotation, cast shadow,
+#          uneven lighting, folds, lens blur, sensor noise, JPEG.
+#
+# ORDERING IS LOAD-BEARING and is enforced in code, not here. Ink and paper
+# phases run on the FLAT page, before any geometry, because a crease belongs to
+# the paper and must be transformed with it; painting one across an already
+# skewed image reads as a defect in the file rather than in the document. Blur,
+# noise and compression run last, because they belong to the sensor and the
+# file.
+#
+# EVERY KEY IS REQUIRED, including the ones that are empty. `ink: []` states
+# that a tier deliberately leaves the ink alone; omitting it would leave a
+# reader unable to tell a decision from an oversight.
+#
+# Augmentation names must be registered in generators/degradation/augment.py.
+# The registry is an allow-list rather than a passthrough to Augraphy's whole
+# catalogue, so a typo here becomes a startup diagnostic naming the valid
+# options.
+#
+# DELIBERATELY NOT USED, part 1 -- NOT REPRODUCIBLE. `Folding` and
+# `DirtyRollers` produce exactly the artefacts this study wants, and neither is
+# seedable: with p=1 and every documented RNG seeded, five runs at one seed give
+# five different images, because both delegate to numba-compiled helpers whose
+# state nothing reaches. Their artefacts are provided instead by `marks:` below,
+# implemented in generators/degradation/geometry.py and drawing all randomness
+# from the tier's own seeded generator.
+#
+# A TIER MUST DISCRIMINATE. The point of a severity ladder is to find where a
+# system breaks, so a tier that no system can read measures nothing -- it adds a
+# floor every system sits on equally. Both `heavy` tiers were first written
+# harsher than they are now and pulled back after looking at the output: they
+# should be at the edge of legibility for a human, not past it.
+#
+# DELIBERATELY NOT USED, part 3: DirtyDrum. It is reproducible, and it is still
+# registered in augment.py, but at every setting tried -- including its gentlest
+# -- it lays broad black bars both across and down the page rather than the fine
+# drum streaking the name suggests. It removed more of the page than the rest of
+# the heavy tier put together. The severity it was there for is supplied by
+# stronger roller streaks and harsher optics instead.
+#
+# DELIBERATELY NOT USED, part 2: BleedThrough, PageBorder and BookBinding. All three
+# *read* images from Augraphy's on-disk cache and composite whatever the last
+# run left behind, which makes output depend on directory state rather than on
+# the seed. Showthrough from the reverse of a page is a real scanner artefact
+# and would be worth having; it is excluded because this implementation of it
+# is not reproducible.
+
+families:
+
+  # ---------------------------------------------------------------- scanner
+  scan:
+    description: >
+      Flatbed or sheet-fed scanner. The page is held flat and square, so the
+      geometry is a small skew rather than a perspective warp.
+    tiers:
+
+      - name: light
+        suffix: scan1
+        description: A well-maintained office scanner, lightly compressed.
+        ink:
+          - augmentation: InkBleed
+            intensity: [0.03, 0.10]
+            kernel: 3
+        paper:
+          - augmentation: LightingGradient
+            max_brightness: 255
+            direction: 90
+        marks: []          # a well-maintained scanner leaves no roller marks
+        geometry:
+          mode: skew
+          rotation_deg: [-0.8, 0.8]
+          margin: [0.01, 0.02]
+        camera:
+          blur: [0.1, 0.3]
+          noise_sigma: [1, 2]
+          jpeg: [88, 96]
+
+      - name: moderate
+        suffix: scan2
+        description: >
+          A worn ADF: roller streaks down the feed direction, lamp falloff to
+          one side, heavier compression.
+        ink:
+          - augmentation: InkBleed
+            intensity: [0.10, 0.22]
+            kernel: 3
+        paper:
+          - augmentation: LightingGradient
+            max_brightness: 248
+            direction: 45
+        marks:
+          - mark: roller_streaks
+            count: [2, 5]
+            width: [4, 11]
+            strength: [0.04, 0.10]
+        geometry:
+          mode: skew
+          rotation_deg: [-2.0, 2.0]
+          margin: [0.01, 0.03]
+        camera:
+          blur: [0.3, 0.6]
+          noise_sigma: [2, 4]
+          jpeg: [70, 85]
+
+      - name: heavy
+        suffix: scan3
+        description: >
+          A tired device near the end of its life: heavy roller marking, ink
+          spread, soft focus and aggressive compression. The tier that should
+          break small digits first -- and it is meant to be readable, with
+          effort, or it discriminates between nothing.
+        ink:
+          - augmentation: InkBleed
+            intensity: [0.20, 0.35]
+            kernel: 5
+        paper:
+          - augmentation: LightingGradient
+            max_brightness: 240
+            direction: 45
+        marks:
+          - mark: roller_streaks
+            count: [4, 8]
+            width: [6, 18]
+            strength: [0.10, 0.22]
+        geometry:
+          mode: skew
+          rotation_deg: [-3.5, 3.5]
+          margin: [0.02, 0.04]
+        camera:
+          blur: [0.6, 1.1]
+          noise_sigma: [5, 8]
+          jpeg: [40, 60]
+
+  # ------------------------------------------------------------------ photo
+  photo:
+    description: >
+      A phone photograph of the page on a desk. Ported from the predecessor
+      repo's receipt pipeline, where the severities were tuned against real
+      photographed receipts; the geometry is unchanged, and only the page it is
+      applied to is wider.
+    tiers:
+
+      - name: light
+        suffix: photo1
+        description: Held square-ish, good light, minor foreshortening.
+        ink:
+          - augmentation: InkBleed
+            intensity: [0.05, 0.15]
+            kernel: 3
+        paper:
+          - augmentation: LightingGradient
+            max_brightness: 255
+            direction: 90
+        marks: []          # a flat, unfolded page
+        geometry:
+          mode: warp
+          foreshorten: [0.01, 0.03]
+          rotation_deg: [-3, 3]
+          margin: [0.05, 0.10]
+        camera:
+          blur: [0.2, 0.5]
+          noise_sigma: [1, 3]
+          jpeg: [85, 95]
+
+      - name: moderate
+        suffix: photo2
+        description: Off-axis, with the photographer's own shadow across a corner.
+        ink:
+          - augmentation: InkBleed
+            intensity: [0.15, 0.30]
+            kernel: 5
+        paper:
+          - augmentation: LightingGradient
+            max_brightness: 245
+            direction: 45
+          - augmentation: ShadowCast
+            side: bottom
+            opacity: [0.25, 0.45]
+        marks: []          # still unfolded; the damage here is light and angle
+        geometry:
+          mode: warp
+          foreshorten: [0.03, 0.06]
+          rotation_deg: [-8, 8]
+          margin: [0.07, 0.14]
+        camera:
+          blur: [0.5, 1.2]
+          noise_sigma: [3, 6]
+          jpeg: [65, 85]
+
+      - name: heavy
+        suffix: photo3
+        description: >
+          A page that has been folded and put in a pocket, photographed badly
+          in poor light.
+        ink:
+          - augmentation: InkBleed
+            intensity: [0.25, 0.45]
+            kernel: 5
+        paper:
+          - augmentation: LightingGradient
+            max_brightness: 235
+            direction: 45
+          - augmentation: ShadowCast
+            side: top
+            opacity: [0.22, 0.38]
+        marks:
+          - mark: fold_ridges
+            count: [2, 3]
+            strength: [0.06, 0.14]
+        geometry:
+          mode: warp
+          foreshorten: [0.06, 0.11]
+          rotation_deg: [-14, 14]
+          margin: [0.10, 0.18]
+        camera:
+          blur: [1.0, 2.0]
+          noise_sigma: [6, 11]
+          jpeg: [40, 60]

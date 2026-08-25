@@ -1,0 +1,32 @@
+# Master generation config. Every key below is required: the loader fails fast
+# on any omission rather than falling back to a Python default.
+#
+# Deliberately absent, compared with the predecessor repo:
+#   receipt_degradation  the degradation module does not cross — this corpus is
+#                        pristine-only (design §2, §9), so there is no tier list
+#                        and no variant count.
+#   derived_formats      CSV/JSONL projection belongs to the extraction
+#                        benchmark, not to transcription.
+#   eval_set             the extraction evaluation export, and the only reader
+#                        of config/extraction_schema.yml.
+#
+# `generate_clean` is gone for the same reason: with degradation out of scope
+# every render is clean, so it was a switch with one position.
+
+output_dir: output
+derived_dir: derived
+ground_truth_dir: ground_truth
+
+document_types:
+  bank_statements:
+    ground_truth: ground_truth/bank_statements.yml
+    layouts: config/layouts/bank_statements.yml
+    output_subdir: bank_statements
+  receipts:
+    ground_truth: ground_truth/receipts.yml
+    layouts: config/layouts/receipts.yml
+    output_subdir: receipts
+  invoices:
+    ground_truth: ground_truth/invoices.yml
+    layouts: config/layouts/invoices.yml
+    output_subdir: invoices

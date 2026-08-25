@@ -1,0 +1,169 @@
+# Field definitions for synthetic business document benchmark.
+# 20 columns across the three document types: bank statements, receipts, invoices.
+
+# Fields required only by particular layouts.
+#
+# A layout that draws a block no other layout has still needs its data
+# AUTHORED, like everything else on the page. The Westpac rewards summary was
+# hardcoded into config/layouts/bank_statements.yml as literal strings —
+# fabricated figures, byte-identical on all seven westpac_premium pages,
+# derived from nothing and validated by nothing, while appearing in the
+# transcript and so being scored. Declaring the fields here puts them back
+# under the same rule as every other scored value.
+#
+# Only the layouts named here carry these; the other 48 bank statements do not
+# and must not.
+layout_fields:
+  westpac_premium:
+    - REWARDS_OPENING_BALANCE
+    - REWARDS_POINTS_EARNED
+    - REWARDS_BONUS_POINTS
+    - REWARDS_POINTS_REDEEMED
+    - REWARDS_CLOSING_BALANCE
+    - REWARDS_POINTS_STATUS
+
+# Rewards arithmetic, enforced by validate the way gst_consistency is: the
+# closing balance is not free, it is opening + earned + bonus - redeemed.
+rewards_consistency:
+  opening: REWARDS_OPENING_BALANCE
+  earned: REWARDS_POINTS_EARNED
+  bonus: REWARDS_BONUS_POINTS
+  redeemed: REWARDS_POINTS_REDEEMED
+  closing: REWARDS_CLOSING_BALANCE
+
+
+document_fields:
+  bank_statement:
+    - DOCUMENT_TYPE
+    - SUPPLIER_NAME
+    - STATEMENT_DATE_RANGE
+    - TRANSACTION_DATES
+    - TRANSACTION_DESCRIPTIONS
+    - TRANSACTION_AMOUNTS_PAID
+    - TRANSACTION_AMOUNTS_RECEIVED
+    - ACCOUNT_BALANCE
+    - PAYER_NAME
+
+  receipt:
+    - DOCUMENT_TYPE
+    - SUPPLIER_NAME
+    - BUSINESS_ABN
+    - BUSINESS_ADDRESS
+    - INVOICE_DATE
+    - IS_GST_INCLUDED
+    - GST_AMOUNT
+    - TOTAL_AMOUNT
+    - LINE_ITEM_DESCRIPTIONS
+    - LINE_ITEM_QUANTITIES
+    - LINE_ITEM_PRICES
+    - LINE_ITEM_TOTAL_PRICES
+
+  invoice:
+    - DOCUMENT_TYPE
+    - SUPPLIER_NAME
+    - BUSINESS_ABN
+    - BUSINESS_ADDRESS
+    - INVOICE_DATE
+    - IS_GST_INCLUDED
+    - GST_AMOUNT
+    - TOTAL_AMOUNT
+    - LINE_ITEM_DESCRIPTIONS
+    - LINE_ITEM_QUANTITIES
+    - LINE_ITEM_PRICES
+    - LINE_ITEM_TOTAL_PRICES
+    - PAYER_NAME
+    - PAYER_ADDRESS
+
+# The union of the three document_fields lists above, in the order the
+# derived CSV writes them. Nothing else belongs here: a column no surviving
+# type declares would be a NOT_FOUND column on every row of the corpus.
+all_columns:
+  - DOCUMENT_TYPE
+  - SUPPLIER_NAME
+  - BUSINESS_ABN
+  - BUSINESS_ADDRESS
+  - GST_AMOUNT
+  - INVOICE_DATE
+  - IS_GST_INCLUDED
+  - LINE_ITEM_DESCRIPTIONS
+  - LINE_ITEM_QUANTITIES
+  - LINE_ITEM_PRICES
+  - LINE_ITEM_TOTAL_PRICES
+  - PAYER_ADDRESS
+  - PAYER_NAME
+  - STATEMENT_DATE_RANGE
+  - TOTAL_AMOUNT
+  - TRANSACTION_AMOUNTS_PAID
+  - TRANSACTION_DATES
+  - TRANSACTION_DESCRIPTIONS
+  - TRANSACTION_AMOUNTS_RECEIVED
+  - ACCOUNT_BALANCE
+
+document_type_values:
+  - BANK_STATEMENT
+  - RECEIPT
+  - INVOICE
+
+# Documentation only — no code reads this block. The formats it describes
+# are enforced by generators/schema.py's regexes (sourced from field_types
+# below) and generators/derive_outputs.py's NOT_FOUND fill; this exists so a
+# human reading this file doesn't have to go find the code to learn them.
+field_formats:
+  date: "DD/MM/YYYY"
+  amount: "decimal without $ prefix"
+  boolean: "true / false"
+  list: "pipe-delimited (item1|item2|item3)"
+  not_found: "NOT_FOUND"
+
+field_types:
+  date:
+    - INVOICE_DATE
+  date_range:
+    - STATEMENT_DATE_RANGE
+  amount:
+    - GST_AMOUNT
+    - TOTAL_AMOUNT
+    - ACCOUNT_BALANCE
+  amount_list:
+    - TRANSACTION_AMOUNTS_PAID
+    - TRANSACTION_AMOUNTS_RECEIVED
+    - LINE_ITEM_PRICES
+    - LINE_ITEM_TOTAL_PRICES
+  date_list:
+    - TRANSACTION_DATES
+  text_list:
+    - LINE_ITEM_DESCRIPTIONS
+    - TRANSACTION_DESCRIPTIONS
+    - LINE_ITEM_QUANTITIES
+  boolean:
+    - IS_GST_INCLUDED
+  abn:
+    - BUSINESS_ABN
+
+# Fields that describe the same rows and must therefore carry the same number of
+# pipe-delimited items. A mismatch means row N of one column describes a different
+# row from column to column, which silently corrupts every position-wise score
+# downstream. Keyed by DOCUMENT_TYPE; a type absent here has no parallel fields.
+#
+# Previously hardcoded in generators/schema.py. Declared here so the invariant is
+# visible to anyone reading the schema rather than only to anyone reading Python.
+parallel_field_groups:
+  RECEIPT:
+    - [LINE_ITEM_DESCRIPTIONS, LINE_ITEM_QUANTITIES, LINE_ITEM_PRICES, LINE_ITEM_TOTAL_PRICES]
+  INVOICE:
+    - [LINE_ITEM_DESCRIPTIONS, LINE_ITEM_QUANTITIES, LINE_ITEM_PRICES, LINE_ITEM_TOTAL_PRICES]
+  BANK_STATEMENT:
+    - [TRANSACTION_DATES, TRANSACTION_DESCRIPTIONS, TRANSACTION_AMOUNTS_PAID]
+
+# GST arithmetic, checked by `pipeline validate` when IS_GST_INCLUDED is true:
+# GST_AMOUNT must equal TOTAL_AMOUNT / divisor, rounded half-up to `decimals`.
+#
+# 11 is the Australian GST fraction on a tax-inclusive total (10% GST means the
+# tax is one eleventh of the total, not one tenth). Declared rather than assumed
+# so another jurisdiction is a YAML edit.
+gst_consistency:
+  divisor: 11
+  decimals: 2
+  inclusive_field: IS_GST_INCLUDED
+  gst_field: GST_AMOUNT
+  total_field: TOTAL_AMOUNT

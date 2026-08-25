@@ -1,0 +1,325 @@
+# Invoice layouts. Every invoice is a fixed A4-ish page of the same geometry,
+# so the four layouts share their page box, type sizes, budgets and almost all
+# of their blocks; each `body:` below is a sequence of the shared blocks in this
+# file, and the differences between the four are exactly the differences you can
+# read in those four sequences.
+#
+# Type sizes keep the names the legacy file already used, and so does the odd
+# ordering they imply: `subheader` (28) is the invoice's workhorse size -- it is
+# what `_normalize_layout` handed the legacy renderer as `font_size_small` --
+# while `body` (20) is used only for the supplier and payer *name* lines.
+_invoice_page: &invoice_page
+  page_dimensions:
+    width: 1900
+    height: 3508
+  margin: 100
+  content_width: 1700
+  font_sizes:
+    header: 48
+    subheader: 28
+    body: 20
+
+# Per-field pixel budgets: header/bill-to fields use the content box (1700px);
+# the line-item description column is 900px wide (see the table block below).
+_invoice_field_budgets: &invoice_field_budgets
+  SUPPLIER_NAME: {width: 1700, fit: shrink_then_wrap, min_font: 12, max_lines: 2}
+  BUSINESS_ADDRESS: {width: 1700, fit: shrink_then_wrap, min_font: 12, max_lines: 2}
+  ABN_LINE: {width: 1700, fit: shrink, min_font: 12, max_lines: 1}
+  PAYER_NAME: {width: 1700, fit: shrink_then_wrap, min_font: 12, max_lines: 2}
+  PAYER_ADDRESS: {width: 1700, fit: shrink_then_wrap, min_font: 12, max_lines: 2}
+  LINE_ITEM_DESC: {width: 870, fit: shrink, min_font: 12, max_lines: 1}
+
+# The ex-GST subtotal exists nowhere in ground truth: the legacy renderer
+# computed TOTAL_AMOUNT - GST_AMOUNT inline. See generators/layout_dsl/
+# field_providers.py's computed_totals, which every receipt already uses.
+_invoice_field_providers: &invoice_field_providers
+  - {name: computed_totals, params: {}}
+  - {name: invoice_terms, params: {}}
+
+# Every primitive parameter an invoice layout must supply a default for.
+# Values are the legacy renderer's Python literals, transcribed verbatim.
+_invoice_defaults_values: &invoice_defaults_values
+  role: subheader
+  color: "black"
+  align: left
+  bold: false
+  # legacy: font_family: sans-serif. Carlito is the shared baseline (it is
+  # metric-compatible with Calibri, the modern AU invoice register); the two
+  # layouts below override it to liberation_sans so the corpus carries both
+  # typographic registers rather than one.
+  family: carlito
+  # Off for every text block but the one that sets `title: true` — the page's
+  # own title, which serialises as the transcript's single H1.
+  text_title: false
+  # Every separator the legacy renderer drew was the same one: a 1px #CCCCCC
+  # line 8px below the cursor, with the cursor advancing 20px in total.
+  rule_thickness: 1
+  rule_pad_above: 8
+  rule_pad_below: 11
+  rule_fill_char: none
+  spacer_height: 20               # the gap legacy left after each line-item table
+  pair_value_align: left
+  pair_min_gap: 0
+  # The "Date" line's separator. The right-aligned totals pairs below override
+  # it with ":" -- legacy printed "Total:" hard against its label, with no
+  # trailing space before the right-aligned amount.
+  pair_separator: ": "
+  table_header: true
+  table_header_bold: false        # legacy drew the column headings in font_s, unbolded
+  table_header_rule_top: true
+  table_header_rule_gap: 16
+  table_row_inset_y: 0
+  # Legacy passed no line_spacing when drawing a line-item description, so its
+  # recorded box is one fitted-font line tall (28px), not one 52px row tall.
+  table_cell_line_spacing: font
+  table_group_gap: 10
+  table_fill_inset: 0
+  table_dividers: []
+  table_offset_y: 0
+  table_sub_line_height: 0
+  banner_text_color: "white"
+  banner_text_y: 0
+  banner_role: header
+  panel_padding: 0
+  panel_border_color: "black"
+  split_gap: 0
+  split_divider_color: "black"
+  # Legacy advanced by a per-line literal after every line it drew, not by a
+  # ratio of the font size, so every text/pair block below declares its own
+  # `line_advance:`. This mapping (int(font_sizes.<role> * 1.4), the convention
+  # the bank layouts use) is what the line-item table's own header-label advance
+  # resolves through -- the one advance no block declares.
+  line_advance: {header: 67, subheader: 39, body: 28}
+
+_invoice_title: &invoice_title
+  {type: text, content: "TAX INVOICE", role: header, bold: true, title: true,
+   line_advance: 80}
+
+_invoice_rule: &invoice_rule {type: rule, color: "#CCCCCC"}
+
+# --- seller ------------------------------------------------------------------
+_invoice_seller_name: &invoice_seller_name
+  {type: text, content: "{SUPPLIER_NAME}", role: body, budget: SUPPLIER_NAME,
+   field: SUPPLIER_NAME, line_advance: 48}
+_invoice_seller_address: &invoice_seller_address
+  {type: text, content: "{BUSINESS_ADDRESS}", budget: BUSINESS_ADDRESS,
+   field: BUSINESS_ADDRESS, line_advance: 40}
+_invoice_seller_abn: &invoice_seller_abn
+  {type: text, content: "ABN: {BUSINESS_ABN}", budget: ABN_LINE,
+   field: BUSINESS_ABN, line_advance: 64}
+
+# --- buyer -------------------------------------------------------------------
+# Legacy drew this whole group under one `if payer:` guard, so the address line
+# is guarded on PAYER_NAME as well as its own field there. Every one of the 55
+# corpus invoices carries both, so guarding the address on PAYER_ADDRESS alone
+# is equivalent for anything that passes `pipeline validate`.
+_invoice_bill_to: &invoice_bill_to
+  {type: text, content: "Bill To:", color: gray, line_advance: 40, when: PAYER_NAME}
+_invoice_payer_name: &invoice_payer_name
+  {type: text, content: "{PAYER_NAME}", role: body, budget: PAYER_NAME,
+   field: PAYER_NAME, line_advance: 44, when: PAYER_NAME}
+_invoice_payer_address: &invoice_payer_address
+  {type: text, content: "{PAYER_ADDRESS}", budget: PAYER_ADDRESS,
+   field: PAYER_ADDRESS, line_advance: 44, when: PAYER_ADDRESS}
+_invoice_buyer_gap: &invoice_buyer_gap {type: spacer, height: 28, when: PAYER_NAME}
+
+# A pair, not a text: legacy recorded only the value's own box, offset past the
+# "Date: " label it drew in the same string.
+_invoice_date: &invoice_date
+  {type: pair, label: "Date", value: "{INVOICE_DATE}", field: INVOICE_DATE, line_advance: 52}
+
+# --- line items --------------------------------------------------------------
+# The header labels and the cell text both sit 12px inside the 52px band they
+# share (label_inset_y / row_inset_y). The two amount columns' headings are
+# left-aligned 200px to the left of the amounts beneath them, which is why they
+# carry their own label_x/label_align.
+_invoice_line_items: &invoice_line_items
+  type: table
+  rows: pipe_fields
+  frame: filled
+  fill_color: "#F0F0F0"
+  grouping: none
+  row_height: 52
+  header_height: 52
+  label_inset_y: 12
+  row_inset_y: 12
+  params:
+    fields: {description: LINE_ITEM_DESCRIPTIONS, quantity: LINE_ITEM_QUANTITIES,
+             price: LINE_ITEM_PRICES, total: LINE_ITEM_TOTAL_PRICES}
+    decimal_keys: [price, total]
+  columns:
+    - {key: description, label: "Description", align: left, x: 0,
+       budget: LINE_ITEM_DESC, field: LINE_ITEM_DESCRIPTIONS}
+    - {key: quantity, label: "Qty", align: left, x: 900, field: LINE_ITEM_QUANTITIES}
+    - {key: price, label: "Unit Price", align: right, x: 1250,
+       label_x: 1050, label_align: left, field: LINE_ITEM_PRICES}
+    - {key: total, label: "Total", align: right, x: 1750,
+       label_x: 1550, label_align: left, field: LINE_ITEM_TOTAL_PRICES}
+# Deliberately bare: a plain spacer means "this layout's standard gap", which
+# is `defaults.spacer_height` (20px, legacy's gap after each line-item table).
+# Pinning the 20 inline would put a second copy of that number in the file and
+# leave `defaults.spacer_height` declared but read by nothing -- `_invoice_
+# buyer_gap` states `height:` precisely because its 28px *differs*.
+_invoice_table_gap: &invoice_table_gap {type: spacer}
+
+# `tax_invoice_mixed` used to draw two labelled tables, "GST-Applicable Items"
+# and "GST-Free Items", over the *same* LINE_ITEM_* list -- the legacy renderer
+# never split the items, it drew the identical list twice under two headings, so
+# every item appeared in both. The second table suppressed geometry capture to
+# stop its duplicate boxes colliding with the first's.
+#
+# Removed: the corpus carries no per-item GST flag, and `IS_GST_INCLUDED` is
+# `true` on all 55 invoices, so a GST-free table contradicted the scored ground
+# truth. All items are GST-inclusive; the layout now draws one table like the
+# others.
+
+# --- totals ------------------------------------------------------------------
+# A fixed 400px column at the page's right edge (legacy: right_edge - 400),
+# which equal division cannot express; the left column draws nothing.
+_invoice_totals_separate: &invoice_totals_separate
+  type: split
+  widths: [1300, 400]
+  children:
+    - []
+    - - {type: pair, label: "Subtotal", value: "{SUBTOTAL_AMOUNT}", value_align: right,
+         separator: ":", currency: symbol, line_advance: 44}
+      - {type: pair, label: "GST (10%)", value: "{GST_AMOUNT}", value_align: right,
+         separator: ":", currency: symbol, field: GST_AMOUNT, line_advance: 44}
+      - {type: pair, label: "Total", value: "{TOTAL_AMOUNT}", value_align: right,
+         separator: ":", currency: symbol, field: TOTAL_AMOUNT, role: header, bold: true, min_gap: 24,
+         line_advance: 64}
+
+# GST-inclusive presentation: no subtotal, and GST is a component of the total
+# rather than an addition to it, so it is drawn *after* the total.
+_invoice_totals_inclusive: &invoice_totals_inclusive
+  type: split
+  widths: [1300, 400]
+  children:
+    - []
+    - - {type: pair, label: "Total", value: "{TOTAL_AMOUNT}", value_align: right,
+         separator: ":", currency: symbol, field: TOTAL_AMOUNT, role: header, bold: true, min_gap: 24,
+         line_advance: 64}
+      # This label is far longer than the separate branch's "GST (10%)" and
+      # overruns the fixed 400px totals column, so it declares a 24px min_gap:
+      # without one it collides with the right-aligned amount and the two merge
+      # into a single OCR token. It must still carry `field:` -- GST_AMOUNT is a
+      # KILE column, and the DocILE exporter raises on a present field with no
+      # captured bounding box.
+      - {type: pair, label: "GST included (10%)", value: "{GST_AMOUNT}", value_align: right,
+         separator: ":", currency: symbol, field: GST_AMOUNT, min_gap: 24, line_advance: 40}
+
+# Legacy rendered any section it had no branch for as its bare `label:`, which
+# is all these two ever drew — 55 pages carrying "Payment Terms:" with nothing
+# after it. The values come from the `invoice_terms` field provider, which
+# picks from config/data_pools.yml by case id; they are page furniture, not
+# ground truth, so no `field:` links them to a scored column.
+_invoice_payment_terms: &invoice_payment_terms
+  {type: pair, label: "Payment Terms", value: "{PAYMENT_TERMS}", color: gray,
+   line_advance: 40}
+
+# tax_invoice_high_value only.
+_invoice_delivery: &invoice_delivery
+  {type: pair, label: "Delivery", value: "{DELIVERY_TERMS}", color: gray,
+   line_advance: 40}
+
+layouts:
+  tax_invoice_standard:
+    <<: *invoice_page
+    field_budgets: *invoice_field_budgets
+    field_providers: *invoice_field_providers
+    defaults:
+      <<: *invoice_defaults_values
+    body:
+      - *invoice_title
+      - *invoice_rule
+      - *invoice_seller_name
+      - *invoice_seller_address
+      - *invoice_seller_abn
+      - *invoice_bill_to
+      - *invoice_payer_name
+      - *invoice_payer_address
+      - *invoice_buyer_gap
+      - *invoice_date
+      - *invoice_rule
+      - *invoice_line_items
+      - *invoice_table_gap
+      - *invoice_rule
+      - *invoice_totals_separate
+      - *invoice_payment_terms
+
+  tax_invoice_gst_inclusive:
+    <<: *invoice_page
+    field_budgets: *invoice_field_budgets
+    field_providers: *invoice_field_providers
+    defaults:
+      <<: *invoice_defaults_values
+      family: liberation_sans     # Arial register, against carlito elsewhere
+    # Identical to tax_invoice_standard but for its totals block.
+    body:
+      - *invoice_title
+      - *invoice_rule
+      - *invoice_seller_name
+      - *invoice_seller_address
+      - *invoice_seller_abn
+      - *invoice_bill_to
+      - *invoice_payer_name
+      - *invoice_payer_address
+      - *invoice_buyer_gap
+      - *invoice_date
+      - *invoice_rule
+      - *invoice_line_items
+      - *invoice_table_gap
+      - *invoice_rule
+      - *invoice_totals_inclusive
+      - *invoice_payment_terms
+  tax_invoice_high_value:
+    <<: *invoice_page
+    field_budgets: *invoice_field_budgets
+    field_providers: *invoice_field_providers
+    defaults:
+      <<: *invoice_defaults_values
+    # Identical to tax_invoice_standard but for the trailing delivery line.
+    body:
+      - *invoice_title
+      - *invoice_rule
+      - *invoice_seller_name
+      - *invoice_seller_address
+      - *invoice_seller_abn
+      - *invoice_bill_to
+      - *invoice_payer_name
+      - *invoice_payer_address
+      - *invoice_buyer_gap
+      - *invoice_date
+      - *invoice_rule
+      - *invoice_line_items
+      - *invoice_table_gap
+      - *invoice_rule
+      - *invoice_totals_separate
+      - *invoice_payment_terms
+      - *invoice_delivery
+  tax_invoice_mixed:
+    <<: *invoice_page
+    field_budgets: *invoice_field_budgets
+    field_providers: *invoice_field_providers
+    defaults:
+      <<: *invoice_defaults_values
+      family: liberation_sans     # Arial register, against carlito elsewhere
+    # tax_invoice_standard's sequence with the single line-item table replaced
+    # by two labelled ones over the same list.
+    body:
+      - *invoice_title
+      - *invoice_rule
+      - *invoice_seller_name
+      - *invoice_seller_address
+      - *invoice_seller_abn
+      - *invoice_bill_to
+      - *invoice_payer_name
+      - *invoice_payer_address
+      - *invoice_buyer_gap
+      - *invoice_date
+      - *invoice_rule
+      - *invoice_line_items
+      - *invoice_table_gap
+      - *invoice_rule
+      - *invoice_totals_separate
+      - *invoice_payment_terms

@@ -1,0 +1,319 @@
+# Australian business content pools for synthetic document generation.
+#
+# `retailers` and `professional_services` are REAL businesses. They are never
+# emitted into generated documents — content_engine.py reads only their
+# `name` fields to seed the real-name blocklist that fictional_business()
+# screens invented names against.
+
+faker_config:
+  locale: en_AU
+  seed_base: 42
+
+locations:
+  - {suburb: Alexandria, postcode: "2015", state: NSW}
+  - {suburb: Hawthorn East, postcode: "3123", state: VIC}
+  - {suburb: Fortitude Valley, postcode: "4006", state: QLD}
+  - {suburb: Norwood, postcode: "5067", state: SA}
+  - {suburb: Subiaco, postcode: "6008", state: WA}
+  - {suburb: Hobart, postcode: "7000", state: TAS}
+  - {suburb: Parramatta, postcode: "2150", state: NSW}
+  - {suburb: South Yarra, postcode: "3141", state: VIC}
+  - {suburb: Toowoomba, postcode: "4350", state: QLD}
+  - {suburb: Glenelg, postcode: "5045", state: SA}
+  - {suburb: Newtown, postcode: "2042", state: NSW}
+  - {suburb: Richmond, postcode: "3121", state: VIC}
+  - {suburb: New Farm, postcode: "4005", state: QLD}
+  - {suburb: Unley, postcode: "5061", state: SA}
+  - {suburb: Fremantle, postcode: "6160", state: WA}
+  - {suburb: Battery Point, postcode: "7004", state: TAS}
+  - {suburb: Chatswood, postcode: "2067", state: NSW}
+  - {suburb: St Kilda, postcode: "3182", state: VIC}
+  - {suburb: Paddington, postcode: "4064", state: QLD}
+  - {suburb: Prospect, postcode: "5082", state: SA}
+  - {suburb: Leederville, postcode: "6007", state: WA}
+  - {suburb: Manuka, postcode: "2603", state: ACT}
+  - {suburb: Cronulla, postcode: "2230", state: NSW}
+  - {suburb: Brunswick, postcode: "3056", state: VIC}
+
+street_types: [St, Ave, Rd, Dr, Pl, Cres, Ct, Tce, Way, Ln, Gr, Blvd, Cl, Pde]
+
+business_name_parts:
+  surnames:
+    [Ashcroft, Bramwell, Calloway, Denholm, Eastwick, Fenwick, Goswell, Harrowgate,
+     Ibbotson, Kirriemuir, Lonsdale, Marchbank, Norcott, Ockendon, Penhallow, Quennell,
+     Ravensdale, Southcott, Tremayne, Underhill, Verrall, Wakeling, Yarrow, Ashby,
+     Blackwood, Carrington, Dunmore, Ellery, Farrant, Greenhalgh]
+  suburb_prefixes:
+    [Metro, National, Central, Coastal, Northern, Southern, Western, Eastern, Greater,
+     Prime, Capital, Regional, Statewide, Riverside, Harbourside]
+  category_nouns:
+    hardware: ["Hardware", "Trade Supplies", "Building Centre", "Timber & Tools", "Home Improvement"]
+    grocery: ["Grocer", "Fresh Market", "Foodstore", "Provisions", "Corner Market"]
+    office: ["Office Supplies", "Stationery Co", "Business Supplies", "Print & Office"]
+    electronics: ["Electronics", "Tech Store", "Digital Supplies", "AV & Appliances"]
+    retail: ["Department Store", "General Store", "Retail Co", "Emporium"]
+    pharmacy: ["Pharmacy", "Chemist", "Health Store", "Discount Chemist"]
+    liquor: ["Cellars", "Liquor Merchants", "Bottle Shop", "Wine & Spirits"]
+    fuel: ["Fuel", "Service Station", "Petroleum", "Roadhouse"]
+    automotive: ["Auto Parts", "Automotive Supplies", "Motor Spares", "Tyre & Auto"]
+    accounting: ["& Associates Accounting", "Chartered Accountants", "Tax & Advisory", "Accounting Group"]
+    legal: ["Legal", "& Partners Lawyers", "Solicitors", "Legal Group"]
+    it_services: ["IT Solutions", "Technology Group", "Digital Services", "IT Consulting"]
+    consulting: ["Business Consulting", "Strategy Group", "Advisory", "Consulting Partners"]
+    marketing: ["Marketing Group", "Creative Agency", "Brand & Media", "Marketing Co"]
+
+product_catalog:
+  - {description: "Milk 2L", unit: ea, price_low: 2.50, price_high: 5.50}
+  - {description: "Bread White 700g", unit: ea, price_low: 3.00, price_high: 5.00}
+  - {description: "Chicken Breast 500g", unit: ea, price_low: 7.00, price_high: 14.00}
+  - {description: "Pasta 500g", unit: ea, price_low: 1.50, price_high: 4.00}
+  - {description: "Tomato Sauce 500ml", unit: ea, price_low: 2.50, price_high: 5.50}
+  - {description: "Chips BBQ 175g", unit: ea, price_low: 3.00, price_high: 6.00}
+  - {description: "Toilet Paper 12pk", unit: ea, price_low: 8.00, price_high: 16.00}
+  - {description: "Dishwashing Liquid", unit: ea, price_low: 3.50, price_high: 7.00}
+  - {description: "Laundry Powder 2kg", unit: ea, price_low: 12.00, price_high: 22.00}
+  - {description: "Shampoo 400ml", unit: ea, price_low: 5.00, price_high: 12.00}
+  - {description: "Batteries AA 8pk", unit: ea, price_low: 8.00, price_high: 18.00}
+  - {description: "HDMI Cable 2m", unit: ea, price_low: 12.00, price_high: 35.00}
+  - {description: "USB Hub 4-port", unit: ea, price_low: 15.00, price_high: 45.00}
+  - {description: "Phone Case", unit: ea, price_low: 10.00, price_high: 40.00}
+  - {description: "Printer Paper A4 500pk", unit: ea, price_low: 8.00, price_high: 18.00}
+  - {description: "Pens Ballpoint 10pk", unit: ea, price_low: 4.00, price_high: 10.00}
+  - {description: "Paint Brush Set", unit: ea, price_low: 12.00, price_high: 35.00}
+  - {description: "Drill Bit Set", unit: ea, price_low: 25.00, price_high: 80.00}
+  - {description: "Garden Hose 20m", unit: ea, price_low: 35.00, price_high: 120.00}
+  - {description: "Potting Mix 25L", unit: ea, price_low: 8.00, price_high: 20.00}
+  - {description: "Motor Oil 5L", unit: ea, price_low: 28.00, price_high: 60.00}
+  - {description: "Car Air Freshener", unit: ea, price_low: 5.00, price_high: 15.00}
+  - {description: "Wine Red 750ml", unit: ea, price_low: 12.00, price_high: 35.00}
+  - {description: "Beer Case 24", unit: ea, price_low: 45.00, price_high: 75.00}
+  - {description: "Sparkling Water 12pk", unit: ea, price_low: 8.00, price_high: 16.00}
+  - {description: "Coffee Beans 1kg", unit: ea, price_low: 15.00, price_high: 35.00}
+  - {description: "Olive Oil 500ml", unit: ea, price_low: 8.00, price_high: 20.00}
+  - {description: "Cereal Box 500g", unit: ea, price_low: 4.00, price_high: 9.00}
+  - {description: "Yoghurt Tub 1kg", unit: ea, price_low: 5.00, price_high: 10.00}
+  - {description: "Frozen Pizza", unit: ea, price_low: 6.00, price_high: 12.00}
+  - {description: "Screwdriver Set", unit: ea, price_low: 15.00, price_high: 40.00}
+  - {description: "Extension Cord 10m", unit: ea, price_low: 18.00, price_high: 45.00}
+  - {description: "LED Light Bulb 4pk", unit: ea, price_low: 10.00, price_high: 25.00}
+  - {description: "Kitchen Sponge 6pk", unit: ea, price_low: 3.00, price_high: 7.00}
+  - {description: "Hand Soap Refill 1L", unit: ea, price_low: 6.00, price_high: 14.00}
+  - {description: "Sunscreen SPF50 200ml", unit: ea, price_low: 10.00, price_high: 22.00}
+  - {description: "Panadol 24pk", unit: ea, price_low: 6.00, price_high: 12.00}
+  - {description: "Bandaids 40pk", unit: ea, price_low: 5.00, price_high: 10.00}
+  - {description: "Tyre Pressure Gauge", unit: ea, price_low: 8.00, price_high: 20.00}
+  - {description: "Wiper Blades Pair", unit: ea, price_low: 20.00, price_high: 50.00}
+  - {description: "Car Vacuum Cleaner", unit: ea, price_low: 30.00, price_high: 70.00}
+
+service_catalog:
+  - {description: "Professional consultation services", unit: hrs, price_low: 150, price_high: 350}
+  - {description: "Legal document preparation", unit: hrs, price_low: 200, price_high: 500}
+  - {description: "Software development services", unit: hrs, price_low: 120, price_high: 280}
+  - {description: "Business strategy consulting", unit: hrs, price_low: 250, price_high: 600}
+  - {description: "Marketing campaign management", unit: hrs, price_low: 100, price_high: 200}
+  - {description: "Accounting and bookkeeping", unit: hrs, price_low: 80, price_high: 180}
+  - {description: "IT support and maintenance", unit: hrs, price_low: 90, price_high: 220}
+  - {description: "Financial planning services", unit: hrs, price_low: 180, price_high: 400}
+  - {description: "Tax return preparation", unit: ea, price_low: 350, price_high: 800}
+  - {description: "Audit services", unit: hrs, price_low: 220, price_high: 450}
+  - {description: "Trademark registration", unit: ea, price_low: 500, price_high: 1200}
+  - {description: "Website design and development", unit: ea, price_low: 800, price_high: 3000}
+  - {description: "Annual report preparation", unit: ea, price_low: 600, price_high: 1500}
+  - {description: "Corporate training workshop", unit: day, price_low: 1200, price_high: 3500}
+  - {description: "Risk assessment review", unit: ea, price_low: 900, price_high: 2500}
+  - {description: "Contract review and drafting", unit: hrs, price_low: 220, price_high: 480}
+  - {description: "Payroll processing services", unit: hrs, price_low: 70, price_high: 150}
+  - {description: "Cloud infrastructure migration", unit: ea, price_low: 2000, price_high: 6000}
+  - {description: "Brand identity design", unit: ea, price_low: 900, price_high: 2800}
+  - {description: "Due diligence review", unit: hrs, price_low: 300, price_high: 650}
+  - {description: "Cybersecurity assessment", unit: ea, price_low: 1500, price_high: 4500}
+  - {description: "Employee mediation services", unit: hrs, price_low: 180, price_high: 350}
+
+# EFTPOS terminal-slip constants for the receipt payment block. Every key is
+# required; generators/payment_block.py fails fast on any omission.
+payment_terminal:
+  # Weighted method pool for receipts. POS-plausible only — deliberately
+  # excludes BPAY / PayPal / Bank Transfer, which never print a terminal slip.
+  receipt_method_weights:
+    EFTPOS: 30
+    Visa: 25
+    Mastercard: 20
+    AMEX: 5
+    Cash: 0            # every receipt in this corpus is linked to a bank transaction
+    Apple Pay: 5
+    Google Pay: 3
+  acquirers:
+    - Tyro Payments EFTPOS
+    - Westpac EFTPOS
+    - CBA Smart EFTPOS
+    - ANZ Worldline EFTPOS
+    - Smartpay EFTPOS
+    - NAB EFTPOS
+  schemes:
+    EFTPOS:
+      display: eftpos
+      aid: A0000003841001
+      pan_digits: 16
+      account_types: [SAV, CHQ]
+    Visa:
+      display: VISA CREDIT
+      aid: A0000000031010
+      pan_digits: 16
+      account_types: [CR]
+    Mastercard:
+      display: MASTERCARD
+      aid: A0000000041010
+      pan_digits: 16
+      account_types: [CR]
+    AMEX:
+      display: AMERICAN EXPRESS
+      aid: A00000002501
+      pan_digits: 15
+      account_types: [CR]
+    Visa Debit:
+      display: VISA DEBIT
+      aid: A0000000031010
+      pan_digits: 16
+      account_types: [CHQ, SAV]
+    Mastercard Debit:
+      display: MASTERCARD DEBIT
+      aid: A0000000041010
+      pan_digits: 16
+      account_types: [CHQ, SAV]
+  # A linked receipt's scheme is fixed by its bank row, not by the weighted pool.
+  # Longest matching prefix wins. `validate` fails if a linked description matches none.
+  bank_description_methods:
+    MASTERCARD DEBIT: Mastercard Debit
+    VISA DEBIT: Visa Debit
+    EFTPOS: EFTPOS
+  # A linked receipt's scheme is fixed; this decides how often that payment is
+  # presented as a phone wallet over the same scheme. 'none' means plain card.
+  wallet_presentation_weights:
+    none: 90
+    Apple Pay: 6
+    Google Pay: 4
+  wallets:
+    Apple Pay: APPLE PAY
+    Google Pay: GOOGLE PAY
+  entry_modes:
+    card: (c)
+    wallet: (t)
+  # The slip's fixed wording -- CUSTOMER COPY, CONTACTLESS, APPROVED 00, the
+  # AID:/Card:/PSN:/Terminal ID:/Transaction Ref:/Purchase AUD labels, the
+  # cash tendered/change labels and the retain-copy footer -- is NOT config.
+  # It is page chrome, and it lives with the rest of the page's fixed text in
+  # the `body:` tree of config/layouts/receipts.yml. This file holds only the
+  # pools a receipt *samples* from; every value below varies document to
+  # document and reaches the page through the `receipt_payment` field
+  # provider (generators/layout_dsl/field_providers.py).
+  #
+  # Cash-tender arithmetic: tendered is the next note of this denomination
+  # above the total, plus 0..(cash_extra_notes - 1) extra notes of the same
+  # denomination -- see derive_payment's _cash_tender helper.
+  cash_tender_step: 5
+  cash_extra_notes: 3
+
+# Deterministic POS values for receipts, derived from
+# sha256("{case_id}:pos:{invoice_date}"). Hex slices 0-8 belong to this block;
+# payment_terminal (above) consumes 10-40 of the same digest. Every key is
+# required; generators/payment_block.py's load_pos_pools fails fast on any
+# omission.
+pos_terminal:
+  staff_names:
+    [Sarah, James, Emma, Liam, Olivia, Noah, Chloe, Jack,
+     Mia, Ethan, Ava, Will, Sophie, Ben, Isla, Tom]
+  hour_min: 8
+  hour_span: 12          # 08:00-19:59
+  register_min: 1
+  register_span: 8       # 01-08
+  receipt_number_prefix: "R-"
+  receipt_number_digest_length: 6
+
+banks:
+  - {code: cba, name: Commonwealth Bank, bsb_prefix: "06", header_color: "#FFD700", header_bg: "#000000"}
+  - {code: westpac, name: Westpac, bsb_prefix: "03", header_color: "#FFFFFF", header_bg: "#D5002B"}
+  - {code: nab, name: National Australia Bank, bsb_prefix: "08", header_color: "#FFFFFF", header_bg: "#C8102E"}
+  - {code: anz, name: ANZ, bsb_prefix: "01", header_color: "#FFFFFF", header_bg: "#003087"}
+
+# {merchant} is upper-cased by content_engine callers before formatting these
+# templates, matching real AU bank-statement styling and keeping
+# seed_transaction_links.py's _extract_suburb() (which distinguishes an
+# ALL-CAPS merchant token from a Title-Case suburb) parsing correctly.
+bank_descriptions:
+  eftpos: "EFTPOS {merchant} {location} AUS"
+  visa_debit: "VISA DEBIT PURCHASE CARD {last4} {merchant} {location} AU"
+  mastercard_debit: "MASTERCARD DEBIT {merchant} {location} AU"
+  bpay: "BPAY {biller} CRN {crn}"
+  direct_debit: "DD {merchant} {ref} MHF {mhf}"
+  transfer: "Transfer To {name} NetBank"
+  salary: "Salary PAYROLL {ref}"
+  atm_withdrawal: "ATM WITHDRAWAL {location}"
+
+real_name_blocklist_extra:
+  [Aldi, IGA, Telstra, Optus, "Origin Energy", AGL, Qantas, "Bank of Queensland",
+   Suncorp, ING, "Bendigo Bank", "Australia Post", Medicare, "McDonald's", KFC, Subway]
+
+# Which category_nouns categories feed receipts (retail) vs invoices (services).
+# Semantic partition — not derivable from category_nouns keys alone.
+receipt_categories: [hardware, grocery, office, electronics, retail, pharmacy, liquor, fuel, automotive]
+service_categories: [accounting, legal, it_services, consulting, marketing]
+
+# Existing real businesses — never emitted; content_engine.py reads only the
+# `name` field from each to build the real-name blocklist.
+retailers:
+  - {name: Bunnings Warehouse, address: "123 Main St, Alexandria NSW 2015", abn: "18 634 229 001", category: hardware}
+  - {name: Woolworths, address: "100 George St, Sydney NSW 2000", abn: "88 000 014 675", category: grocery}
+  - {name: Coles, address: "800 Toorak Rd, Hawthorn East VIC 3123", abn: "11 004 089 936", category: grocery}
+  - {name: Officeworks, address: "245 Bourke St, Melbourne VIC 3000", abn: "36 004 763 526", category: office}
+  - {name: JB Hi-Fi, address: "2 Parliament Sq, Melbourne VIC 3002", abn: "80 093 220 649", category: electronics}
+  - {name: Harvey Norman, address: "A1 Richmond Rd, Homebush West NSW 2140", abn: "85 003 237 545", category: electronics}
+  - {name: Kmart Australia, address: "690 Springvale Rd, Mulgrave VIC 3170", abn: "73 004 129 956", category: retail}
+  - {name: Big W, address: "1 Woolworths Way, Bella Vista NSW 2153", abn: "88 000 014 675", category: retail}
+  - {name: Chemist Warehouse, address: "250 Bourke St, Melbourne VIC 3000", abn: "42 618 648 185", category: pharmacy}
+  - {name: "Dan Murphy's", address: "47-61 Egan St, Richmond VIC 3121", abn: "37 006 275 906", category: liquor}
+  - {name: BP Australia, address: "717 Bourke St, Docklands VIC 3008", abn: "27 008 560 007", category: fuel}
+  - {name: Shell Australia, address: "8 Redfern Rd, Hawthorn East VIC 3123", abn: "46 004 610 459", category: fuel}
+  - {name: Ampol Limited, address: "29-33 Bourke Rd, Alexandria NSW 2015", abn: "40 004 201 307", category: fuel}
+  - {name: 7-Eleven Australia, address: "357 Ferntree Gully Rd, Mount Waverley VIC 3149", abn: "65 005 825 412", category: fuel}
+  - {name: Myer, address: "295 Lonsdale St, Melbourne VIC 3000", abn: "83 004 153 263", category: retail}
+  - {name: David Jones, address: "310 Bourke St, Melbourne VIC 3000", abn: "96 000 324 945", category: retail}
+  - {name: Target Australia, address: "12-14 Polo Ave, Mona Vale NSW 2103", abn: "75 004 250 944", category: retail}
+  - {name: Spotlight, address: "91 Dunning Ave, Rosebery NSW 2018", abn: "17 007 092 579", category: retail}
+  - {name: Supercheap Auto, address: "751-753 Springvale Rd, Mulgrave VIC 3170", abn: "61 004 806 598", category: automotive}
+  - {name: Repco, address: "53-57 Lonsdale St, Melbourne VIC 3000", abn: "25 004 825 802", category: automotive}
+
+professional_services:
+  - {name: "Smith & Associates Accounting", address: "Level 12, 100 Collins St, Melbourne VIC 3000", category: accounting}
+  - {name: "Johnson Legal", address: "Suite 5, 200 George St, Sydney NSW 2000", category: legal}
+  - {name: "Brisbane IT Solutions", address: "42 Creek St, Brisbane QLD 4000", category: it_services}
+  - {name: "Adelaide Business Consulting", address: "Level 3, 77 King William St, Adelaide SA 5000", category: consulting}
+  - {name: "Perth Marketing Group", address: "Level 8, 140 St Georges Tce, Perth WA 6000", category: marketing}
+
+# Trailing sections on a tax invoice. The predecessor drew these two as a bare
+# `Payment Terms:` / `Delivery:` with nothing after them -- it rendered any
+# section it had no branch for as its label alone -- so 55 invoice pages
+# carried a label with no value. The transcripts recorded that faithfully,
+# which is the point: the page, not the transcript, was what needed fixing.
+#
+# Derived rather than authored: these are page furniture, not scored ground
+# truth, and `generators/layout_dsl/field_providers.py`'s `invoice_terms`
+# picks one of each per case by SHA-256 of the case id, the same way
+# `receipt_pos` picks a register and a staff name. Every key is required.
+invoice_terms:
+  # Kept short enough to sit on one line inside the 1700px invoice content
+  # width; `validate`'s overflow check is what enforces that, not this comment.
+  payment:
+    - Net 30 days from invoice date
+    - Net 14 days from invoice date
+    - Payment due on receipt
+    - Net 7 days from invoice date
+    - 50% deposit, balance on completion
+    - Payment due end of month following invoice
+  # Only tax_invoice_high_value draws a delivery line, so these reach 14 of the
+  # 55 invoices.
+  delivery:
+    - Standard delivery, 5-7 business days
+    - Express delivery, 1-2 business days
+    - Pickup from premises by arrangement
+    - Delivered on completion of works
+    - Freight forwarded, charges apply

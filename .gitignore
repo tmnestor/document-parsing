@@ -1,0 +1,33 @@
+# Generated corpora. Everything here is reproduced from what IS tracked --
+# ground_truth/, config/ and a fixed seed -- so committing it would add hundreds
+# of megabytes that a `generate` run recreates byte for byte.
+output/
+derived/
+parsing_*/
+degraded/
+
+# Transfer archives for the corpora above.
+*.tgz
+degraded_*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+.coverage
+htmlcov/
+
+# Editors and OS. AppleDouble sidecars in particular have broken transfers of
+# this corpus before: a `._CASE001.png` beside a real image is counted by a
+# naive glob and fails a completeness check.
+.DS_Store
+._*
+.ipynb_checkpoints/
+.vscode/
+.idea/
+
+# Local agent instructions, per-developer.
+CLAUDE.md

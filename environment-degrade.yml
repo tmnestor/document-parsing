@@ -1,0 +1,63 @@
+# Image degradation. A FOURTH environment, alongside docparse,
+# docparse-docling and docparse-mineru, and for the same reason they exist:
+# its dependencies are incompatible with keeping `docparse` small.
+#
+# `docparse` is five pure-Python packages by design, and must never gain numpy
+# or opencv. That is not tidiness — the runner tests import `runners/` in an
+# environment where no parser is installed, and `generators/` is expected to be
+# importable from a checkout with nothing heavy in it. Degradation needs numpy,
+# opencv and augraphy, so it goes here and `generators/degradation/` is the one
+# package in the repo that `docparse` cannot import.
+#
+#   conda env create -f environment-degrade.yml
+#   conda activate docparse-degrade
+#   python -m generators.degradation.cli --corpus parsing_20260820 --family scan
+#
+# AUGRAPHY MUST BE INSTALLED WITHOUT ITS DEPENDENCIES. It declares
+# `opencv-python` — the full GUI build — as a hard requirement, which would
+# displace the headless build pinned below. Both provide `cv2`, and having both
+# installed is a coin toss over which one wins. After creating the environment:
+#
+#     pip uninstall -y opencv-python
+#     pip install --no-deps augraphy==8.2.6
+#
+# Verify:
+#     pip list | grep -i opencv     # must show ONLY opencv-python-headless
+#     python -c "import cv2, augraphy; print(cv2.__version__, augraphy.__version__)"
+#
+# PINS ARE EXACT, NOT PREFERENCES. Degraded images are corpus data: their hashes
+# go in a manifest and `score` refuses to score against a different vintage. A
+# version bump that shifts one pixel invalidates every prediction made against
+# the old images. numpy is additionally capped by numba, which augraphy imports.
+
+name: docparse-degrade
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+      # Shared with docparse, same versions, so a degraded corpus is written by
+      # the same code that writes a clean one.
+      - Pillow==12.2.0
+      - PyYAML==6.0.3
+      - typer==0.27.1
+      - rich==14.3.0
+
+      # Degradation only.
+      - numpy==2.3.5
+      - opencv-python-headless==4.13.0.92
+      - augraphy==8.2.6
+
+      # Augraphy's real transitive requirements, listed explicitly because it
+      # is installed with --no-deps and would otherwise pull the GUI opencv.
+      - numba==0.66.0
+      - scikit-image
+      - scikit-learn
+
+      # Gates. `tests/test_degradation.py` skips when augraphy is absent, so it
+      # is a no-op in docparse and a real test here.
+      - pytest
+      - pytest-cov
