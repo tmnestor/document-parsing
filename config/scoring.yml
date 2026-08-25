@@ -1,0 +1,48 @@
+# How a prediction is compared with a transcript. This file is the whole scoring
+# convention: reading it should answer what "normalised" means without consulting
+# Python. Every key is required -- the loader fails fast on any omission,
+# including the keys whose value is a no-op.
+#
+# Two numbers are reported and neither is the real one on its own. NORMALISED
+# runs both sides through the steps below and measures *reading*. STRICT compares
+# the raw forms and measures reading plus adherence to the conventions in
+# config/serialisation.yml. A model can read a page perfectly and score badly on
+# strict; that is the point of reporting both.
+
+normalisation:
+  # Unicode compatibility composition, applied first so every later step sees
+  # one representation of each character.
+  unicode_form: NFKC
+
+  # Runs of whitespace become a single space. Applied last, so syntax stripped
+  # above cannot leave doubled gaps behind.
+  collapse_whitespace: true
+
+  # En dash, em dash, figure dash and horizontal bar fold to a hyphen; curly
+  # quotes fold to their ASCII forms. Typographic substitution is not a reading
+  # error, and penalising it would measure font handling.
+  fold_dashes: true
+  fold_quotes: true
+
+  # Heading markers, table pipes and separator rows, emphasis markers and code
+  # backticks are removed from both sides. The normalised metric measures what
+  # the model read, not how it marked it up; the strict metric is where markup
+  # adherence is scored.
+  strip_markdown: true
+
+  # OFF, deliberately, and written out rather than omitted. Reading an account
+  # name or a reference with the correct case is legitimately part of
+  # transcription, so folding case would hide a real error.
+  fold_case: false
+
+reporting:
+  # A prediction longer than this multiple of its reference is counted as
+  # degenerate. Set from observed behaviour, not taste: a calibration run had one
+  # model emit 128,768 characters for a ~2,400-character page -- 50x. Three
+  # separates that failure from ordinary verbosity.
+  degenerate_length_multiple: 3.0
+
+  # Reported per group, alongside the mean. Median first because CER is unbounded
+  # above, so one runaway page can dominate a mean; 100 is the worst case, which
+  # a mean hides in the other direction.
+  percentiles: [50, 90, 100]
