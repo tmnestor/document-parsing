@@ -14,13 +14,46 @@ refusing any text draw the recorder has not authorised — see `note_text_drawn`
 import json
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from PIL import ImageDraw
 
 
 class CoverageError(RuntimeError):
     """Raised when text reaches the canvas with no event authorising it."""
+
+
+class GeometryError(RuntimeError):
+    """Raised when a text draw cannot be measured into a box."""
+
+
+def _drawn_string(args: tuple, kwargs: dict) -> str:
+    """Recover the string from an `ImageDraw.text` call's arguments."""
+    if "text" in kwargs:
+        return str(kwargs["text"])
+    return str(args[1]) if len(args) > 1 else ""
+
+
+@dataclass(frozen=True)
+class Span:
+    """One drawn line of ink, measured where it landed.
+
+    A block's text is captured pre-wrap (design §4.2) because wrapping is an
+    artifact of font size and fit budget. A span is the other half of that
+    truth: the post-wrap line, and the box it actually occupies.
+
+    Attributes:
+        text: The line as drawn.
+        poly: Eight coordinates — top-left, top-right, bottom-right,
+            bottom-left as (x, y) pairs, matching OmniDocBench's `poly`.
+    """
+
+    text: str
+    poly: tuple[int, ...]
+
+    def as_dict(self) -> dict:
+        """Return the flat serialisable form."""
+        return {"text": self.text, "poly": list(self.poly)}
 
 
 @dataclass(frozen=True)
@@ -32,16 +65,25 @@ class Event:
         kind: Event kind, e.g. `title`, `line`, `pair`, `cell`.
         text: The resolved string as drawn, before wrapping; None for markers.
         meta: Kind-specific detail, e.g. a cell's row and column.
+        spans: The drawn lines this event authorised, each measured where its
+            ink landed (design §4).
     """
 
     seq: int
     kind: str
     text: str | None
     meta: dict = field(default_factory=dict)
+    spans: tuple[Span, ...] = ()
 
     def as_dict(self) -> dict:
         """Return the flat serialisable form (design §4.2)."""
-        return {"seq": self.seq, "kind": self.kind, "text": self.text, "meta": self.meta}
+        return {
+            "seq": self.seq,
+            "kind": self.kind,
+            "text": self.text,
+            "meta": self.meta,
+            "spans": [s.as_dict() for s in self.spans],
+        }
 
 
 class TranscriptRecorder:
@@ -108,6 +150,24 @@ class TranscriptRecorder:
         finally:
             self._decorating = previous
 
+    def note_span(self, poly: tuple[int, ...], text: str) -> None:
+        """Attach a drawn line to the event that authorised it.
+
+        Called by `TranscriptDraw` for every text draw that is content rather
+        than decoration. Does nothing when no event is current — that case is
+        already a `CoverageError` raised by `note_text_drawn`.
+
+        Args:
+            poly: The drawn line's eight box coordinates.
+            text: The line as drawn.
+        """
+        if self._decorating or self._current_seq is None:
+            return
+        existing = self._events[self._current_seq]
+        self._events[self._current_seq] = replace(
+            existing, spans=(*existing.spans, Span(text=text, poly=poly))
+        )
+
     def note_text_drawn(self) -> None:
         """Record that text reached the canvas, and check it was authorised.
 
@@ -161,11 +221,51 @@ class TranscriptDraw:
     def text(self, *args, **kwargs) -> None:
         """Draw text, first checking that an event authorises it.
 
+        Also measures the drawn line and attaches it to that event as a span
+        (design §4). Measuring here rather than in the primitives is what makes
+        the boxes ink-shaped: this is the one place that sees the string, the
+        position and the font together, after every fit and wrap decision.
+
         Raises:
             CoverageError: No event authorises this draw.
+            GeometryError: The call shape is not one this proxy can measure.
         """
         self._recorder.note_text_drawn()
+        self._recorder.note_span(self._measure(args, kwargs), _drawn_string(args, kwargs))
         self._draw.text(*args, **kwargs)
+
+    def _measure(self, args: tuple, kwargs: dict) -> tuple[int, ...]:
+        """Return the eight box coordinates of a pending text draw.
+
+        Args:
+            args: Positional arguments as passed to `ImageDraw.text`.
+            kwargs: Keyword arguments as passed to `ImageDraw.text`.
+
+        Returns:
+            Top-left, top-right, bottom-right, bottom-left as (x, y) pairs.
+
+        Raises:
+            GeometryError: The position, string or font cannot be recovered.
+        """
+        xy = kwargs.get("xy", args[0] if args else None)
+        string = _drawn_string(args, kwargs)
+        font = kwargs.get("font")
+        if not (isinstance(xy, tuple) and len(xy) == 2) or font is None:
+            raise GeometryError(
+                "Cannot measure a text draw.\n"
+                f"  What:     draw.text() was called with args={args!r} kwargs={sorted(kwargs)}; "
+                "the position or the font could not be recovered.\n"
+                "  Where:    generators/transcript.py -> TranscriptDraw._measure\n"
+                "  Expected: draw.text((x, y), string, font=font, ...) — the shape every helper "
+                "in generators/common.py uses.\n"
+                "  Recover:  call draw.text with an (x, y) tuple and an explicit font=, or extend "
+                "_measure to handle the new call shape."
+            )
+        x, y = int(xy[0]), int(xy[1])
+        width = int(self._draw.textlength(string, font=font))
+        ascent, descent = font.getmetrics()
+        height = ascent + descent
+        return (x, y, x + width, y, x + width, y + height, x, y + height)
 
     def __getattr__(self, name: str):
         """Forward everything else (line, rectangle, textlength) untouched."""
