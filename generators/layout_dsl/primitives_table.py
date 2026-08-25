@@ -18,6 +18,7 @@ from generators.common import (
     load_font,
 )
 from generators.layout_budgets import field_budget
+from generators.layout_dsl.categories import category_for
 from generators.layout_dsl.context import RenderContext
 from generators.layout_dsl.defaults import resolve_param
 from generators.layout_dsl.primitives_text import font_for, line_advance, resolve_role
@@ -423,8 +424,14 @@ def draw_table(block: dict, ctx: RenderContext, y: int) -> int:
     advance = line_advance(ctx.layout, block, layout_id=ctx.layout_id, layout_path=ctx.layout_path)
     rows = get_provider(block["rows"])(ctx.entry, block.get("params", {}))
 
+    table_seq = None
     if ctx.transcript is not None:
-        ctx.transcript.emit("table_open", None, columns=[str(column["key"]) for column in columns])
+        table_seq = ctx.transcript.emit(
+            "table_open",
+            None,
+            category_type=category_for("table"),
+            columns=[str(column["key"]) for column in columns],
+        )
 
     # A leading synthetic row normally renders first, ahead of any group
     # header (CBA's Opening Balance). NAB's Brought-forward row instead
@@ -561,6 +568,8 @@ def draw_table(block: dict, ctx: RenderContext, y: int) -> int:
             ctx.draw.line([(dx, table_body_start), (dx, y)], fill="black")
 
     if ctx.transcript is not None:
+        assert table_seq is not None  # set above in this same `ctx.transcript is not None` branch
+        ctx.transcript.enclose(table_seq, table_seq)
         ctx.transcript.emit("table_close")
 
     return y

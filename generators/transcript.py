@@ -231,6 +231,23 @@ class TranscriptRecorder:
             "decorative text in `with ctx.transcript.decoration():`."
         )
 
+    def enclose(self, seq: int, since: int) -> None:
+        """Give event `seq` a box enclosing every span drawn after `since`.
+
+        A container primitive draws no ink itself — a table's glyphs belong to
+        its cells — so its box cannot come from its own spans. This composes
+        one from the events it opened.
+
+        Args:
+            seq: The event to give a box to.
+            since: Only events after this seq contribute.
+        """
+        spans = tuple(s for e in self._events[since + 1 :] for s in e.spans)
+        if not spans:
+            return
+        existing = self._events[seq]
+        self._events[seq] = replace(existing, spans=existing.spans + spans)
+
     def as_jsonl(self) -> str:
         """Return the event stream as newline-delimited JSON."""
         return "".join(json.dumps(event.as_dict()) + "\n" for event in self._events)
