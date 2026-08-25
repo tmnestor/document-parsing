@@ -56,6 +56,7 @@ def table_html(events: list[dict]) -> list[str]:
     keys: list[str] = []
     is_header = False
     open_seq: int | None = None
+    open_row_seq: int | None = None
     table_columns: list[str] = []
 
     for event in events:
@@ -66,6 +67,7 @@ def table_html(events: list[dict]) -> list[str]:
             table_columns = list(meta.get("columns") or [])
         elif kind == "row_open":
             row, keys, is_header = [], [], False
+            open_row_seq = int(event["seq"])
         elif kind == "cell":
             row.append(str(event["text"] or ""))
             keys.append(str(meta.get("column_key", "")))
@@ -81,28 +83,44 @@ def table_html(events: list[dict]) -> list[str]:
                 if position < len(cells):
                     cells[position] = f"{cells[position]}{_CELL_JOIN}{event['text'] or ''}".strip()
         elif kind == "row_close":
+            if open_row_seq is None:
+                raise _err("a row_close has no matching row_open.", seq=int(event["seq"]))
             rows.append((row, is_header))
             row, keys, is_header = [], [], False
+            open_row_seq = None
         elif kind == "table_close":
-            tables.append(_render(rows))
-            rows, open_seq = [], None
+            if open_row_seq is not None:
+                raise _err("a row_open has no matching row_close.", seq=open_row_seq)
+            tables.append(_render(rows, table_columns))
+            rows, open_seq, table_columns = [], None, []
 
     if open_seq is not None:
         raise _err("a table_open has no matching table_close.", seq=open_seq)
+    if open_row_seq is not None:
+        raise _err("a row_open has no matching row_close.", seq=open_row_seq)
     return tables
 
 
-def _render(rows: list[tuple[list[str], bool]]) -> str:
+def _render(rows: list[tuple[list[str], bool]], columns: list[str]) -> str:
     """Render collected rows as one HTML table.
 
     Args:
         rows: Each row's cell texts, and whether it is a header row.
+        columns: Column keys from table_open metadata.
 
     Returns:
         The table's HTML, header rows in `<thead>` and the rest in `<tbody>`.
+        Every row is padded to match the column count.
     """
-    head = "".join(_row(cells, "th") for cells, header in rows if header)
-    body = "".join(_row(cells, "td") for cells, header in rows if not header)
+    width = len(columns)
+    blank = ""
+
+    def padded_cells(cells: list[str]) -> list[str]:
+        """Pad cells to match table width."""
+        return (cells + [blank] * (width - len(cells)))[:width]
+
+    head = "".join(_row(padded_cells(cells), "th") for cells, header in rows if header)
+    body = "".join(_row(padded_cells(cells), "td") for cells, header in rows if not header)
     parts = ["<table>"]
     if head:
         parts.append(f"<thead>{head}</thead>")
