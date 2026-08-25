@@ -27,6 +27,10 @@ class GeometryError(RuntimeError):
     """Raised when a text draw cannot be measured into a box."""
 
 
+class BoxCoverageError(RuntimeError):
+    """Raised when an annotatable event drew no ink to measure."""
+
+
 def _drawn_string(args: tuple, kwargs: dict) -> str:
     """Recover the string from an `ImageDraw.text` call's arguments."""
     if "text" in kwargs:
@@ -251,6 +255,35 @@ class TranscriptRecorder:
     def as_jsonl(self) -> str:
         """Return the event stream as newline-delimited JSON."""
         return "".join(json.dumps(event.as_dict()) + "\n" for event in self._events)
+
+    def assert_boxes_complete(self) -> None:
+        """Check every annotatable event drew ink, at page end.
+
+        The converse of `note_text_drawn`: that refuses ink no event
+        authorised, this refuses an event that authorised no ink. A categorised
+        event with no spans would annotate an empty region, so layout recall
+        would fall with nothing on the page to explain it.
+
+        Raises:
+            BoxCoverageError: An event carries a category but drew nothing.
+        """
+        empty = [e for e in self._events if e.category_type is not None and not e.spans]
+        if not empty:
+            return
+        first = empty[0]
+        raise BoxCoverageError(
+            "An annotatable element drew no ink.\n"
+            f"  What:     event seq={first.seq} kind={first.kind!r} category={first.category_type!r} "
+            f"text={first.text!r} declared itself annotatable and drew nothing "
+            f"({len(empty)} such event(s) on this page).\n"
+            "  Where:    generators/layout_dsl/primitives_*.py -> the primitive that emitted it\n"
+            "  Expected: every emit() carrying a category_type is followed by at least one "
+            "draw.text(), e.g.\n"
+            "              ctx.transcript.emit('line', text, category_type=category_for('text'))\n"
+            "              draw_text_left(ctx.draw, text, x, y, font)\n"
+            "  Recover:  draw the element, or drop its category_type if it is a structural "
+            "marker rather than content."
+        )
 
 
 class TranscriptDraw:

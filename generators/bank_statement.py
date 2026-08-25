@@ -49,6 +49,7 @@ def render_via_dsl(entry: dict, layout: dict, layout_id: str) -> tuple[Image.Ima
 
     Raises:
         CoverageError: A primitive drew text without emitting an event.
+        BoxCoverageError: An event carries a category but drew no ink.
     """
     dims = layout["page_dimensions"]
     width, height = dims["width"], dims["height"]
@@ -65,6 +66,7 @@ def render_via_dsl(entry: dict, layout: dict, layout_id: str) -> tuple[Image.Ima
         y=layout["margin"],
         transcript=recorder,
     )
+    recorder.assert_boxes_complete()
     return image, recorder
 
 

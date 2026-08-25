@@ -39,6 +39,7 @@ def render_receipt(entry: dict, layout: dict) -> tuple[Image.Image, TranscriptRe
 
     Raises:
         CoverageError: A primitive drew text without emitting an event.
+        BoxCoverageError: An event carries a category but drew no ink.
     """
     layout_id = str(entry.get("layout", ""))
     width = int(layout["width"])
@@ -59,5 +60,6 @@ def render_receipt(entry: dict, layout: dict) -> tuple[Image.Image, TranscriptRe
         transcript=recorder,
     )
 
+    recorder.assert_boxes_complete()
     height = min(end_y + margin, ceiling)
     return image.crop((0, 0, width, height)), recorder

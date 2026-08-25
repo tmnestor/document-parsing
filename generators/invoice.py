@@ -40,6 +40,7 @@ def render_invoice(entry: dict, layout: dict) -> tuple[Image.Image, TranscriptRe
 
     Raises:
         CoverageError: A primitive drew text without emitting an event.
+        BoxCoverageError: An event carries a category but drew no ink.
     """
     dims = layout["page_dimensions"]
     width, height = int(dims["width"]), int(dims["height"])
@@ -56,4 +57,5 @@ def render_invoice(entry: dict, layout: dict) -> tuple[Image.Image, TranscriptRe
         y=int(layout["margin"]),
         transcript=recorder,
     )
+    recorder.assert_boxes_complete()
     return image, recorder
