@@ -229,3 +229,14 @@ families:
           blur: [1.0, 2.0]
           noise_sigma: [6, 11]
           jpeg: [40, 60]
+
+# WHICH PAGES A FULL RUN DEGRADES. Both keys are required: reading this file
+# alone must answer "what does `degrade` with no flags produce?", and a missing
+# key is an error rather than a silent "all of them".
+#
+# All three document types, despite receipts scoring at ceiling on clean pages.
+# Creating headroom where clean pages have none is exactly what this axis is
+# for -- a degraded receipt can separate models that a clean one cannot.
+corpus:
+  document_types: [bank_statements, receipts, invoices]
+  families: [scan, photo]
