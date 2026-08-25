@@ -3,6 +3,7 @@
 All loaders fail fast with diagnostic errors per CLAUDE.md requirements.
 """
 
+import os
 from pathlib import Path
 
 import yaml
@@ -148,6 +149,47 @@ def load_layout_registry(path: Path) -> dict:
     return data
 
 
+# Subdirectories of the dataset root, derived rather than configured separately
+# so a new vintage is one edit and everything moves together.
+_DERIVED_FROM_ROOT = {"output_dir": "output", "derived_dir": "derived", "exports_dir": "exports"}
+
+
+def resolve_data_dir(value: str, config_path: Path) -> Path:
+    """Turn a configured data directory into an absolute path.
+
+    **Generated corpora belong outside the working tree.** A run writes hundreds
+    of megabytes of images, and keeping that inside the repository leaves only
+    `.gitignore` between it and the history -- one `git add -f`, or a careless
+    edit to that file, is enough. Nothing here forbids an in-repo path; that is
+    the operator's call, and it is visible in the YAML either way. The shipped
+    default is a sibling directory.
+
+    Two expansions make a portable location expressible in YAML, which a literal
+    relative path cannot be:
+
+    * `${VAR}` and `$VAR` from the environment, so several checkouts on a shared
+      machine can point at one store without editing tracked config;
+    * `~`, for the obvious reason.
+
+    A relative path resolves against the REPOSITORY ROOT -- the parent of the
+    config file's directory -- not the working directory, so `../corpus-data`
+    means the same thing however the command was invoked.
+
+    Args:
+        value: The configured path, before expansion.
+        config_path: Path to generation_config.yml, used to locate the root.
+
+    Returns:
+        An absolute path. It is not created here; the caller creates it when it
+        writes.
+    """
+    expanded = Path(os.path.expandvars(str(value))).expanduser()
+    if expanded.is_absolute():
+        return expanded
+    root = config_path.resolve().parent.parent
+    return (root / expanded).resolve()
+
+
 def load_generation_config(path: Path) -> dict:
     """Load the master generation config.
 
@@ -191,7 +233,7 @@ def load_generation_config(path: Path) -> dict:
         )
         raise ValueError(msg) from exc
 
-    required_keys = ["output_dir", "derived_dir", "ground_truth_dir", "document_types"]
+    required_keys = ["dataset_root", "ground_truth_dir", "document_types"]
     for key in required_keys:
         if key not in data:
             msg = (
@@ -205,5 +247,19 @@ def load_generation_config(path: Path) -> dict:
                 "config/generation_config.yml."
             )
             raise ValueError(msg)
+
+    # Resolved here, once, so every command sees the same absolute paths and no
+    # caller has to remember to expand them. `ground_truth_dir` is deliberately
+    # NOT resolved: it is tracked input living beside the config, not output.
+    #
+    # The three writable directories hang off one dated root, so starting a new
+    # vintage is a single edit and images, transcripts and the export cannot end
+    # up describing different runs. An explicitly configured `output_dir` or
+    # `derived_dir` still wins, for the case where one of them must live
+    # somewhere else entirely.
+    root = resolve_data_dir(data["dataset_root"], path)
+    data["dataset_root"] = root
+    for key, leaf in _DERIVED_FROM_ROOT.items():
+        data[key] = resolve_data_dir(data[key], path) if key in data else root / leaf
 
     return data

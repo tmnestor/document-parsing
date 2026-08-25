@@ -22,6 +22,41 @@ python -m generators.pipeline export      # the dated, hashed deliverable
 Nothing is downloaded and nothing is installed after the environment: five
 pure-Python runtime dependencies (`Pillow`, `PyYAML`, `typer`, `rich`, `Faker`).
 
+## Where the data goes
+
+**Outside the repository, under a date-stamped root.**
+
+```
+../document-parsing-data/synthetic_data_2026-08-25/
+  output/       page images, one subdirectory per document type
+  derived/      events.jsonl and transcripts/
+  exports/      parsing_<YYYYMMDD>/, the deliverable
+```
+
+*Outside*, because a full run writes hundreds of megabytes and inside the
+working tree the only thing between that and the git history is `.gitignore`.
+
+*Date stamped*, because **a corpus is a vintage**. Scoring pairs images to
+transcripts through a hashed manifest and refuses a mismatch, so images,
+transcripts and export must describe the same run — and a fixed path silently
+overwrites the previous corpus, invalidating every prediction already scored
+against it.
+
+One key sets all three, so a new vintage is one edit and they cannot drift apart:
+
+```yaml
+dataset_root: ../document-parsing-data/synthetic_data_2026-08-25
+```
+
+`~` and `${VAR}` are expanded, so a shared machine or CI job can point at a store
+without editing tracked config. A relative path resolves against the
+**repository root**, not the working directory, so it means the same thing
+however the command was invoked; absolute paths are taken as given, and
+`--output` / `--derived` / `--target` override for a single run.
+
+Pinned by `tests/test_data_location.py`, which fails if the shipped default ever
+resolves back inside the working tree.
+
 ## Why the labels can be trusted
 
 **Ground truth is authored, not annotated.** The transcript is produced by the

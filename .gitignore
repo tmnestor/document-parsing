@@ -1,9 +1,13 @@
-# Generated corpora. Everything here is reproduced from what IS tracked --
-# ground_truth/, config/ and a fixed seed -- so committing it would add hundreds
-# of megabytes that a `generate` run recreates byte for byte.
+# Generated corpora do NOT land here any more -- config/generation_config.yml
+# resolves output_dir and derived_dir outside the repository, and the export
+# goes beside them. These entries are the belt to that braces: they catch a run
+# whose config was overridden back to a local path, and cost nothing otherwise.
+# Pinned by tests/test_data_location.py, which fails if the shipped default ever
+# resolves inside the working tree again.
 output/
 derived/
 parsing_*/
+exports/
 degraded/
 
 # Transfer archives for the corpora above.

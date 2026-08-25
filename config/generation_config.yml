@@ -13,8 +13,37 @@
 # `generate_clean` is gone for the same reason: with degradation out of scope
 # every render is clean, so it was a switch with one position.
 
-output_dir: output
-derived_dir: derived
+# WHERE GENERATED DATA LANDS.
+#
+# Outside the repository, and DATE STAMPED. Two separate reasons:
+#
+#   Outside, because a full run writes hundreds of megabytes of page images, and
+#   inside the working tree the only thing between that and the git history is
+#   `.gitignore` -- one `git add -f`, or a careless edit to that file, is enough.
+#   A sibling directory cannot be committed by accident at all.
+#
+#   Date stamped, because a corpus is a vintage. Images, transcripts and the
+#   export must describe the SAME run -- scoring pairs them by a hashed manifest
+#   and refuses a mismatch -- and a fixed path silently overwrites the previous
+#   corpus, invalidating every prediction already scored against it. A dated root
+#   keeps old vintages intact and makes "which corpus was that?" answerable.
+#
+# Bump the date to start a new vintage; output/, derived/ and exports/ all move
+# with it, so they cannot end up describing different runs.
+#
+# Accepts `~` and `${VAR}`, so a shared machine or a CI job can point at a store
+# without editing this tracked file:
+#
+#     dataset_root: ${DOCPARSE_DATA}/synthetic_data_2026-08-25
+#     dataset_root: ~/corpora/synthetic_data_2026-08-25
+#
+# A relative path resolves against the REPOSITORY ROOT, not the working
+# directory, so it means the same thing however the command was invoked;
+# absolute paths are taken as given. `--output`, `--derived` and `--target`
+# override for a single run.
+dataset_root: ../document-parsing-data/synthetic_data_2026-08-25
+
+# Tracked INPUT, read from beside this config and never resolved outward.
 ground_truth_dir: ground_truth
 
 document_types:

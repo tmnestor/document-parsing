@@ -48,7 +48,6 @@ _RENDERERS = {
 _DEFAULT_CONFIG = Path("config/generation_config.yml")
 _DEFAULT_POLICY = Path("config/serialisation.yml")
 _DEFAULT_PROMPT = Path("config/prompt.md")
-_DEFAULT_SCORING = Path("config/scoring.yml")
 
 
 def _validate_layouts(layouts: dict, *, doc_type: str, layout_path: str) -> list[str]:
@@ -439,8 +438,12 @@ def export(
         Path | None, typer.Option("--output", help="Override the configured output directory.")
     ] = None,
     target: Annotated[
-        Path, typer.Option("--target", help="Directory to create the export inside.")
-    ] = Path(),
+        Path | None,
+        typer.Option(
+            "--target",
+            help="Directory to create the export inside. Defaults beside the configured data.",
+        ),
+    ] = None,
     date: Annotated[
         str | None, typer.Option("--date", help="Corpus date stamp, YYYYMMDD. Defaults to today.")
     ] = None,
@@ -458,6 +461,11 @@ def export(
     cfg = load_generation_config(config)
     derived_dir = derived if derived is not None else Path(cfg["derived_dir"])
     output_dir = output if output is not None else Path(cfg["output_dir"])
+    # The export is generated data too, so it lands with the rest of it rather
+    # than in whatever directory the command happened to be run from -- which
+    # was the working tree, every time, since these commands are run from the
+    # repository root.
+    export_root = target if target is not None else Path(cfg["exports_dir"])
     records = _load_event_records(derived_dir)
     date_stamp = date if date is not None else datetime.now().strftime("%Y%m%d")
 
@@ -468,7 +476,7 @@ def export(
             transcripts_dir=derived_dir / "transcripts",
             policy_path=policy,
             prompt_path=prompt,
-            target=target,
+            target=export_root,
             date_stamp=date_stamp,
         )
     except ExportError as exc:
