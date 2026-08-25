@@ -78,7 +78,9 @@ def load_scoring_policy(path: Path) -> dict:
             f"expected a mapping, got {type(policy).__name__}.",
             path=resolved,
             key="(document root)",
-            expected="a top-level mapping with 'normalisation:' and 'reporting:' sections.",
+            expected="a top-level mapping of the two policy sections, e.g.\n"
+            "              normalisation:\n                unicode_form: NFKC\n"
+            "              reporting:\n                percentiles: [50, 90, 100]",
             recover="wrap the settings in a top-level mapping.",
         )
 
@@ -146,7 +148,7 @@ def _validate_values(policy: dict, *, path: Path, resolved: Path) -> None:
     if (
         not isinstance(percentiles, list)
         or not percentiles
-        or not all(isinstance(p, int) and 0 < p <= 100 for p in percentiles)
+        or not all(not isinstance(p, bool) and isinstance(p, int) and 0 < p <= 100 for p in percentiles)
     ):
         raise diagnostic(
             f"'percentiles' is {percentiles!r}, which is not a non-empty list of 1-100 integers.",
