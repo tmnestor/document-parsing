@@ -100,8 +100,11 @@ config/          generation_config.yml, field_definitions.yml,
                  serialisation.yml, prompt.md, data_pools.yml, layouts/
 ground_truth/    invoices.yml, receipts.yml, bank_statements.yml
 fonts/           Carlito + Liberation, with licences
-tests/           mirrors the source tree
 ```
+
+Tests are local and not committed — a TDD tool for whoever is editing the
+generator rather than part of what the corpus ships. Write and run them; the
+gates below assume they exist.
 
 ## Adding a document type
 

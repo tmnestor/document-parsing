@@ -33,5 +33,9 @@ htmlcov/
 .vscode/
 .idea/
 
+# Tests are local. They are a TDD tool for whoever is editing the generator, not
+# part of what the corpus ships -- so they are written and run, never committed.
+tests/
+
 # Local agent instructions, per-developer.
 CLAUDE.md
