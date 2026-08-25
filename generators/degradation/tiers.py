@@ -250,14 +250,13 @@ def load_corpus_selection(config_path: Path) -> CorpusSelection:
             a named family has no tiers declared in this file.
     """
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    resolved = config_path.resolve()
 
     block = data.get("corpus")
     if not isinstance(block, dict):
-        raise _corpus_err(
+        raise _err(
             "the 'corpus:' block is missing or is not a mapping.",
-            path=resolved,
-            key="corpus",
+            config_path=config_path,
+            key_path="corpus",
             expected="a mapping with 'document_types' and 'families', e.g.\n"
             "              corpus:\n"
             "                document_types: [bank_statements, receipts, invoices]\n"
@@ -273,10 +272,10 @@ def load_corpus_selection(config_path: Path) -> CorpusSelection:
     ):
         raw = block.get(key)
         if not isinstance(raw, list) or not raw or not all(isinstance(v, str) for v in raw):
-            raise _corpus_err(
+            raise _err(
                 f"'{key}' is {raw!r}, which is not a non-empty list of names.",
-                path=resolved,
-                key=f"corpus.{key}",
+                config_path=config_path,
+                key_path=f"corpus.{key}",
                 expected=f"a non-empty list of names, e.g.\n              {key}: {example}",
                 recover=f"set 'corpus.{key}:' in {config_path} to a non-empty list.",
             )
@@ -284,10 +283,10 @@ def load_corpus_selection(config_path: Path) -> CorpusSelection:
 
     unknown = [f for f in values["families"] if f not in declared]
     if unknown:
-        raise _corpus_err(
+        raise _err(
             f"'families' names {unknown}, which have no tiers declared in this file.",
-            path=resolved,
-            key="corpus.families",
+            config_path=config_path,
+            key_path="corpus.families",
             expected=f"a subset of the declared families {list(declared)}, e.g.\n"
             "              families: [scan, photo]",
             recover=f"remove {unknown} from 'corpus.families', or declare tiers for them "
@@ -295,14 +294,3 @@ def load_corpus_selection(config_path: Path) -> CorpusSelection:
         )
 
     return CorpusSelection(document_types=values["document_types"], families=values["families"])
-
-
-def _corpus_err(what: str, *, path: Path, key: str, expected: str, recover: str) -> TierConfigError:
-    """Build a four-element fail-fast diagnostic for the corpus block."""
-    return TierConfigError(
-        "Invalid degradation config.\n"
-        f"  What:     {what}\n"
-        f"  Where:    {path} -> {key}\n"
-        f"  Expected: {expected}\n"
-        f"  Recover:  {recover}"
-    )
