@@ -106,12 +106,55 @@ def _normalisation_sentence(policy: dict) -> str:
     Returns:
         One sentence naming the Unicode form, the enabled steps, and the
         case-folding decision.
+
+    Raises:
+        ExportError: The policy has no `normalisation` block, or the block is
+            missing a key this sentence needs.
     """
-    rules = policy["normalisation"]
-    steps = [label for key, label in _NORMALISATION_STEPS if rules[key]]
-    joined = ", ".join(steps) if steps else "apply no further steps"
-    tail = "fold case" if rules["fold_case"] else "do not fold case"
-    return f"Unicode {rules['unicode_form']}, {joined}, and {tail}"
+    try:
+        rules = policy["normalisation"]
+        steps = [label for key, label in _NORMALISATION_STEPS if rules[key]]
+        joined = ", ".join(steps) if steps else "apply no further steps"
+        tail = "fold case" if rules["fold_case"] else "do not fold case"
+        return f"Unicode {rules['unicode_form']}, {joined}, and {tail}"
+    except KeyError as err:
+        (key,) = err.args
+        raise ExportError(
+            "Cannot export: config/scoring.yml is missing a key the README needs.\n"
+            f"  What:     '{key}' is absent from its 'normalisation:' block.\n"
+            f"  Where:    {_SCORING_POLICY_PATH.resolve()} -> normalisation.{key}\n"
+            "  Expected: every key of normalisation.unicode_form, "
+            "collapse_whitespace, fold_dashes, fold_quotes, strip_markdown, "
+            "fold_case, e.g.\n"
+            "              normalisation:\n"
+            "                unicode_form: NFKC\n"
+            "                collapse_whitespace: true\n"
+            "  Recover:  restore config/scoring.yml from version control."
+        ) from err
+
+
+def _load_scoring_policy() -> dict:
+    """Read `config/scoring.yml`, cwd-relative like the rest of this module.
+
+    Returns:
+        The parsed policy mapping.
+
+    Raises:
+        ExportError: The file does not exist — e.g. `export` was run from
+            somewhere other than the repository root.
+    """
+    if not _SCORING_POLICY_PATH.exists():
+        raise ExportError(
+            "Cannot export: the scoring policy used to describe normalisation "
+            "is missing.\n"
+            f"  What:     {_SCORING_POLICY_PATH} does not exist.\n"
+            f"  Where:    {_SCORING_POLICY_PATH.resolve()}\n"
+            "  Expected: config/scoring.yml, present relative to the current "
+            "working directory.\n"
+            "  Recover:  run `python -m generators.pipeline export` from the "
+            "repository root, or restore config/scoring.yml."
+        )
+    return yaml.safe_load(_SCORING_POLICY_PATH.read_text(encoding="utf-8")) or {}
 
 
 def readme_text(date_stamp: str, counts: dict[str, int]) -> str:
@@ -127,12 +170,14 @@ def readme_text(date_stamp: str, counts: dict[str, int]) -> str:
 
     Returns:
         The README body.
+
+    Raises:
+        ExportError: `config/scoring.yml` is missing, or lacks a key the
+            normalisation sentence needs.
     """
     total = sum(counts.values())
     rows = "\n".join(f"| {doc_type} | {count} |" for doc_type, count in sorted(counts.items()))
-    normalisation = _normalisation_sentence(
-        yaml.safe_load(_SCORING_POLICY_PATH.read_text(encoding="utf-8"))
-    )
+    normalisation = _normalisation_sentence(_load_scoring_policy())
     return f"""# Document parsing corpus — {date_stamp}
 
 {total} synthetic Australian business documents for benchmarking **full-page
