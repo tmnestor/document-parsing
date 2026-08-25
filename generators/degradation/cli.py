@@ -23,6 +23,7 @@ Usage:
 
 import json
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
@@ -32,7 +33,10 @@ from rich import print as rprint
 from rich.progress import Progress
 
 from generators.degradation import degrade_page, load_tiers, page_seed
+from generators.degradation.matrix import matrix_row, write_matrix
+from generators.degradation.tiers import load_corpus_selection
 from generators.export import manifest_record
+from generators.loader import load_generation_config
 
 app = typer.Typer(add_completion=False)
 
@@ -49,13 +53,67 @@ def _fail(what: str, *, where: str, expected: str, recover: str) -> None:
     raise typer.Exit(1)
 
 
+@dataclass(frozen=True)
+class RunPlan:
+    """What a degrade invocation will actually do.
+
+    Attributes:
+        families: Intake families to render.
+        doc_types: Document types to include.
+        out: Directory the tier corpora are written into.
+    """
+
+    families: tuple[str, ...]
+    doc_types: tuple[str, ...]
+    out: Path
+
+
+def resolve_run(
+    config_path: Path,
+    generation_config_path: Path,
+    *,
+    family: list[str] | None,
+    doc_type: list[str] | None,
+    out: Path | None,
+) -> RunPlan:
+    """Fold flags over configuration to decide what this run covers.
+
+    Extracted from the command body so it can be tested in `docparse`, where
+    augraphy is absent and the degrade loop itself cannot run.
+
+    Args:
+        config_path: Path to `degradation.yml`.
+        generation_config_path: Path to `generation_config.yml`, which resolves
+            where generated data lives.
+        family: `--family` values, or None to use the configured families.
+        doc_type: `--type` values, or None to use the configured types.
+        out: `--out`, or None to default beside the generated data.
+
+    Returns:
+        The resolved plan.
+    """
+    selection = load_corpus_selection(config_path)
+    generation = load_generation_config(generation_config_path)
+    return RunPlan(
+        families=tuple(family) if family else selection.families,
+        doc_types=tuple(doc_type) if doc_type else selection.document_types,
+        out=out if out is not None else Path(generation["exports_dir"]),
+    )
+
+
 @app.command()
 def degrade(
     corpus: Annotated[Path, typer.Option("--corpus", help="An exported clean corpus.")],
-    out: Annotated[Path, typer.Option("--out", help="Where the degraded corpora are written.")] = Path(),
+    out: Annotated[
+        Path | None,
+        typer.Option("--out", help="Where the degraded corpora are written. Defaults beside the data."),
+    ] = None,
     config: Annotated[Path, typer.Option("--config", help="Tier declarations.")] = Path(
         "config/degradation.yml"
     ),
+    generation_config: Annotated[
+        Path, typer.Option("--generation-config", help="Path to generation_config.yml")
+    ] = Path("config/generation_config.yml"),
     family: Annotated[
         list[str] | None,
         typer.Option("--family", help="Intake families to render; repeatable. Default: all."),
@@ -77,10 +135,10 @@ def degrade(
             "an existing export.",
         )
 
-    tiers = load_tiers(config, families=family)
+    plan = resolve_run(config, generation_config, family=family, doc_type=doc_type, out=out)
+    tiers = load_tiers(config, families=list(plan.families))
     records = [json.loads(line) for line in (corpus / "manifest.jsonl").read_text().splitlines() if line]
-    if doc_type:
-        records = [r for r in records if r["doc_type"] in doc_type]
+    records = [r for r in records if r["doc_type"] in plan.doc_types]
     if limit:
         records = records[:limit]
     if not records:
@@ -97,8 +155,9 @@ def degrade(
         f"= {len(records) * len(tiers)} degraded page(s)"
     )
 
+    plan.out.mkdir(parents=True, exist_ok=True)
     for tier in tiers:
-        target = out / f"{corpus.name}_{tier.family}-{tier.name}"
+        target = plan.out / f"{corpus.name}_{tier.family}-{tier.name}"
         (target / "images").mkdir(parents=True, exist_ok=True)
         (target / "transcripts").mkdir(parents=True, exist_ok=True)
 
@@ -144,6 +203,18 @@ def degrade(
         (target / "DEGRADATION.md").write_text(_note(corpus, tier, len(manifest)), encoding="utf-8")
 
         rprint(f"  [green]{tier.label:16}[/green] {len(manifest):4d} page(s) -> {target}")
+
+    # The clean corpus is a row like any other: without that baseline a
+    # comparison cannot separate a weak model from one the degradation hurt.
+    rows = [matrix_row(corpus, family="clean", severity="none")]
+    rows.extend(
+        matrix_row(
+            plan.out / f"{corpus.name}_{tier.family}-{tier.name}", family=tier.family, severity=tier.name
+        )
+        for tier in tiers
+    )
+    matrix_path = write_matrix(rows, plan.out)
+    rprint(f"[green]Matrix written: {matrix_path} ({len(rows)} corpora)[/green]")
 
 
 def _note(corpus: Path, tier, pages: int) -> str:
