@@ -20,6 +20,7 @@ from generators.common import (
 )
 from generators.layout_budgets import field_budget
 from generators.layout_dsl.binding import interpolate
+from generators.layout_dsl.categories import category_for
 from generators.layout_dsl.context import Region, RenderContext
 from generators.layout_dsl.defaults import DefaultsError, resolve_param
 
@@ -407,7 +408,11 @@ def draw_text_block(block: dict, ctx: RenderContext, y: int) -> int:
     # `_draw_fitted_text` may split this string across lines, but wrapping is an
     # artifact of the fit budget, not of content.
     if ctx.transcript is not None:
-        ctx.transcript.emit("title" if is_title else "line", text)
+        ctx.transcript.emit(
+            "title" if is_title else "line",
+            text,
+            category_type=category_for("banner") if is_title else category_for("text"),
+        )
 
     bold = bool(
         resolve_param(block, ctx.layout, "bold", layout_id=ctx.layout_id, layout_path=ctx.layout_path)
@@ -559,7 +564,7 @@ def draw_pair(block: dict, ctx: RenderContext, y: int) -> int:
     # drawn form survives in the event stream and the convention stays a policy
     # decision rather than something baked into the corpus.
     if ctx.transcript is not None:
-        ctx.transcript.emit("pair", None, label=label_text, value=value)
+        ctx.transcript.emit("pair", None, category_type=category_for("pair"), label=label_text, value=value)
 
     budget_name = block.get("budget")
     if budget_name is not None:
@@ -647,14 +652,14 @@ def draw_block(block: dict, ctx: RenderContext, y: int) -> int:
         # a block heading is a section sub-head drawn bold, and emphasis is
         # deliberately outside the Markdown subset.
         if ctx.transcript is not None:
-            ctx.transcript.emit("line", heading_text)
+            ctx.transcript.emit("line", heading_text, category_type=category_for("block"))
         _draw_line(ctx, heading_text, y, font=heading_font, align="left", color=color)
         y += advance
     line_font = font_for(ctx.layout, block, size, layout_id=ctx.layout_id, layout_path=ctx.layout_path)
     for line in block["lines"]:
         line_text = interpolate(line, ctx.entry["fields"])
         if ctx.transcript is not None:
-            ctx.transcript.emit("line", line_text)
+            ctx.transcript.emit("line", line_text, category_type=category_for("block"))
         _draw_line(ctx, line_text, y, font=line_font, align="left", color=color)
         y += advance
     return y
@@ -835,7 +840,7 @@ def draw_banner(block: dict, ctx: RenderContext, y: int) -> int:
     else:
         text = interpolate(block["content"], ctx.entry["fields"])
     if ctx.transcript is not None:
-        ctx.transcript.emit("title", text)
+        ctx.transcript.emit("title", text, category_type=category_for("banner"))
     text_y = int(
         resolve_param(
             block,
