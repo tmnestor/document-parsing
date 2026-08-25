@@ -102,7 +102,16 @@ def load_predictions(root: Path, corpus: Corpus, *, allow_missing: bool = False)
                 f'e.g.\n              "{key}": "…"',
                 recover=f"add '{key}' to run.json in the runner.",
             )
-    run = RunMetadata(**{key: str(data[key]) for key in _REQUIRED_RUN_KEYS})
+        value = data[key]
+        if not isinstance(value, str) or not value:
+            raise diagnostic(
+                f"'{key}' is {value!r} ({type(value).__name__}), not a non-empty string.",
+                path=run_path.resolve(),
+                key=key,
+                expected=f'a non-empty string, e.g.\n              "{key}": "…"',
+                recover=f"fix the runner so it writes '{key}' as a plain string in run.json.",
+            )
+    run = RunMetadata(**{key: data[key] for key in _REQUIRED_RUN_KEYS})
 
     if run.prompt_sha256 != corpus.prompt_sha256:
         raise diagnostic(
