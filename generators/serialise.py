@@ -219,6 +219,28 @@ def _validate_decoration_rule(policy: dict, *, path: Path, resolved: Path) -> No
         )
 
 
+def pair_text(meta: dict, policy: dict) -> str:
+    """Join a `pair` event's label and value under the serialisation policy.
+
+    Shared with `generators.layout`'s `text_block` projection, so a `pair`
+    annotation's text and its line in the Markdown transcript agree by
+    construction — one implementation of the join convention, not two kept in
+    step by hand (design §4: `text` is "exactly as the transcript records
+    it").
+
+    Args:
+        meta: The event's `meta`, carrying `label` and `value`.
+        policy: The validated serialisation policy.
+
+    Returns:
+        The joined text, e.g. "Total: $157.39".
+    """
+    label = str(meta["label"])
+    if policy["pair_strip_trailing_colon"]:
+        label = label.rstrip().removesuffix(":").rstrip()
+    return f"{label}{policy['pair_separator']}{meta['value']}"
+
+
 def _join_cell(text: str, policy: dict) -> str:
     """Fold an authored line break inside a cell onto one line.
 
@@ -385,10 +407,7 @@ def serialise(events: list[dict], policy: dict) -> str:
         elif kind == "line":
             blocks.append(str(text))
         elif kind == "pair":
-            label = str(meta["label"])
-            if policy["pair_strip_trailing_colon"]:
-                label = label.rstrip().removesuffix(":").rstrip()
-            blocks.append(f"{label}{policy['pair_separator']}{meta['value']}")
+            blocks.append(pair_text(meta, policy))
         elif kind == "table_open":
             in_table = True
             columns = [str(key) for key in meta["columns"]]
