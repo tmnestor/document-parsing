@@ -18,7 +18,17 @@ import json
 import shutil
 from pathlib import Path
 
+import yaml
+
 _CHUNK = 1024 * 1024
+_SCORING_POLICY_PATH = Path("config/scoring.yml")
+
+_NORMALISATION_STEPS: tuple[tuple[str, str], ...] = (
+    ("collapse_whitespace", "collapse whitespace runs"),
+    ("fold_dashes", "fold dashes to ASCII"),
+    ("fold_quotes", "fold quotes to ASCII"),
+    ("strip_markdown", "strip Markdown syntax"),
+)
 
 
 class ExportError(RuntimeError):
@@ -82,6 +92,28 @@ def manifest_record(image: Path, transcript: Path, doc_type: str) -> dict:
     }
 
 
+def _normalisation_sentence(policy: dict) -> str:
+    """Describe the normalisation policy in the prose the corpus ships.
+
+    Generated rather than written out, so the shipped README and
+    `config/scoring.yml` cannot drift apart about what "normalised" means. Read
+    as plain YAML: `scoring/` lives in another environment and is deliberately
+    not importable from here.
+
+    Args:
+        policy: The parsed `config/scoring.yml`.
+
+    Returns:
+        One sentence naming the Unicode form, the enabled steps, and the
+        case-folding decision.
+    """
+    rules = policy["normalisation"]
+    steps = [label for key, label in _NORMALISATION_STEPS if rules[key]]
+    joined = ", ".join(steps) if steps else "apply no further steps"
+    tail = "fold case" if rules["fold_case"] else "do not fold case"
+    return f"Unicode {rules['unicode_form']}, {joined}, and {tail}"
+
+
 def readme_text(date_stamp: str, counts: dict[str, int]) -> str:
     """Build the README that ships with the corpus.
 
@@ -98,6 +130,9 @@ def readme_text(date_stamp: str, counts: dict[str, int]) -> str:
     """
     total = sum(counts.values())
     rows = "\n".join(f"| {doc_type} | {count} |" for doc_type, count in sorted(counts.items()))
+    normalisation = _normalisation_sentence(
+        yaml.safe_load(_SCORING_POLICY_PATH.read_text(encoding="utf-8"))
+    )
     return f"""# Document parsing corpus — {date_stamp}
 
 {total} synthetic Australian business documents for benchmarking **full-page
@@ -139,8 +174,7 @@ silently measures something else.
 Report two numbers:
 
 1. **Normalised** — pass prediction and truth through the same normalisation
-   (Unicode NFKC, collapse whitespace runs, fold dashes and quotes to ASCII,
-   strip Markdown syntax), then compute normalised edit distance and
+   ({normalisation}), then compute normalised edit distance and
    character/word error rate. This measures *reading*.
 2. **Strict** — the raw forms as shipped. This measures reading plus adherence
    to the conventions in `serialisation.yml`.
