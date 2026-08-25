@@ -67,6 +67,10 @@ class Event:
         meta: Kind-specific detail, e.g. a cell's row and column.
         spans: The drawn lines this event authorised, each measured where its
             ink landed (design §4).
+        category_type: The OmniDocBench category this element's ink belongs
+            to, or None for a structural marker that draws nothing.
+        order: This event's position in reading order among annotatable
+            events, or None for a structural marker.
     """
 
     seq: int
@@ -74,6 +78,22 @@ class Event:
     text: str | None
     meta: dict = field(default_factory=dict)
     spans: tuple[Span, ...] = ()
+    category_type: str | None = None
+    order: int | None = None
+
+    @property
+    def poly(self) -> tuple[int, ...] | None:
+        """The union of this event's span boxes, or None when it drew nothing.
+
+        Ink-shaped rather than region-shaped (design §4): the box cannot claim
+        a region the glyphs do not occupy, because it is built from them.
+        """
+        if not self.spans:
+            return None
+        xs = [c for s in self.spans for c in s.poly[0::2]]
+        ys = [c for s in self.spans for c in s.poly[1::2]]
+        x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+        return (x0, y0, x1, y0, x1, y1, x0, y1)
 
     def as_dict(self) -> dict:
         """Return the flat serialisable form (design §4.2)."""
@@ -83,6 +103,9 @@ class Event:
             "text": self.text,
             "meta": self.meta,
             "spans": [s.as_dict() for s in self.spans],
+            "category_type": self.category_type,
+            "order": self.order,
+            "poly": list(self.poly) if self.poly is not None else None,
         }
 
 
@@ -93,6 +116,7 @@ class TranscriptRecorder:
         self._events: list[Event] = []
         self._current_seq: int | None = None
         self._decorating = False
+        self._next_order = 0
 
     @property
     def events(self) -> list[Event]:
@@ -104,19 +128,37 @@ class TranscriptRecorder:
         """The seq of the event authorising the next draw, if any."""
         return self._current_seq
 
-    def emit(self, kind: str, text: str | None = None, **meta) -> int:
+    @property
+    def annotations(self) -> list[Event]:
+        """Content events that drew ink, in reading order.
+
+        An event with a category but no spans is excluded: it declared itself
+        annotatable and then drew nothing, which the §7.2 invariant reports as
+        an error rather than silently annotating an empty region.
+        """
+        return [e for e in self._events if e.category_type is not None and e.spans]
+
+    def emit(self, kind: str, text: str | None = None, *, category_type: str | None = None, **meta) -> int:
         """Append an event and authorise the draw that follows it.
 
         Args:
             kind: Event kind.
             text: The resolved string as drawn, or None for a structural marker.
+            category_type: The OmniDocBench category this element's ink belongs
+                to, or None for a structural marker that draws nothing.
             **meta: Kind-specific detail.
 
         Returns:
             The new event's seq.
         """
         seq = len(self._events)
-        self._events.append(Event(seq=seq, kind=kind, text=text, meta=dict(meta)))
+        order = None
+        if category_type is not None:
+            order = self._next_order
+            self._next_order += 1
+        self._events.append(
+            Event(seq=seq, kind=kind, text=text, meta=dict(meta), category_type=category_type, order=order)
+        )
         self._current_seq = seq
         return seq
 
