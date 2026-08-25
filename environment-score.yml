@@ -1,0 +1,31 @@
+# Scoring. A THIRD environment, alongside docparse and docparse-degrade, and for
+# the same reason they are separate: its dependencies are incompatible with
+# keeping `docparse` small.
+#
+# `docparse` is five pure-Python packages by design and must never grow. This
+# environment adds an edit-distance library, which the generator has no use for.
+#
+# It carries NO parser and NO inference stack. Model inference runs on the remote
+# GPU host; predictions arrive here as files on disk. Keeping torch out is what
+# lets scoring run on a laptop, and tests/scoring/test_boundaries.py enforces it.
+#
+#   conda env create -f environment-score.yml
+#   conda activate docparse-score
+#   python -m scoring.score --matrix <exports>/matrix.jsonl \
+#       --predictions-root predictions/ --out rows.jsonl
+
+name: docparse-score
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.12
+  - pyyaml
+  - typer
+  - rich
+  - rapidfuzz
+  - pytest
+  - pytest-cov
+  - ruff
+  - mypy
