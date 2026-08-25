@@ -7,6 +7,7 @@ pages.
 """
 
 import json
+import re
 from pathlib import Path
 from typing import Annotated
 
@@ -23,6 +24,31 @@ from scoring.predictions import PredictionSet, load_predictions
 app = typer.Typer(add_completion=False, help="Score model predictions against an exported corpus.")
 
 _DEFAULT_POLICY = Path("config/scoring.yml")
+
+# Tiers are named `{corpus}_{family}-{severity}` (spec §5.2, generators/degradation/cli.py).
+# A directory whose name doesn't carry that suffix is the clean, undegraded export.
+_TIER_SUFFIX = re.compile(r"^(?P<corpus>.+)_(?P<family>[^-_]+)-(?P<severity>[^-_]+)$")
+
+
+def derive_family_severity(corpus_dir: Path) -> tuple[str, str]:
+    """Recover a corpus's family and severity from its directory name.
+
+    `--corpus` scores one directory at a time with no matrix row to read
+    `family`/`severity` from, so scoring a tier this way used to hardcode
+    `clean`/`none` for every corpus, tier or not (#N1). Tier directories
+    follow one stated naming convention; this parses it back.
+
+    Args:
+        corpus_dir: The corpus directory passed to `--corpus`.
+
+    Returns:
+        `(family, severity)` parsed from the `_{family}-{severity}` suffix, or
+        `("clean", "none")` when the name carries no such suffix.
+    """
+    match = _TIER_SUFFIX.match(corpus_dir.name)
+    if match is None:
+        return "clean", "none"
+    return match.group("family"), match.group("severity")
 
 
 def score_page(reference: str, prediction: str | None, policy: dict, *, verified: bool) -> dict:
@@ -148,6 +174,20 @@ def score(
     predictions: Annotated[
         Path | None, typer.Option("--predictions", help="One model's predictions for --corpus.")
     ] = None,
+    family: Annotated[
+        str | None,
+        typer.Option(
+            "--family",
+            help="Intake family for --corpus, overriding the name derived from its directory.",
+        ),
+    ] = None,
+    severity: Annotated[
+        str | None,
+        typer.Option(
+            "--severity",
+            help="Tier severity for --corpus, overriding the name derived from its directory.",
+        ),
+    ] = None,
     out: Annotated[Path, typer.Option("--out", help="Where rows are written.")] = Path("rows.jsonl"),
     policy_path: Annotated[Path, typer.Option("--policy", help="Path to scoring.yml")] = _DEFAULT_POLICY,
     allow_missing: Annotated[
@@ -175,11 +215,34 @@ def score(
                     expected="a directory holding <model>/<corpus>/ prediction directories.",
                     recover="pass --predictions-root, or score one corpus with --corpus.",
                 )
-            for entry in _matrix_rows(matrix):
+            if not predictions_root.is_dir():
+                raise diagnostic(
+                    f"{predictions_root} does not exist, or is not a directory.",
+                    path=predictions_root.resolve(),
+                    key="--predictions-root",
+                    expected="a directory holding <model>/<corpus>/ prediction directories.",
+                    recover="check the path, or run the model(s) first.",
+                )
+
+            matrix_entries = _matrix_rows(matrix)
+            models_found: set[str] = set()
+            for entry in matrix_entries:
                 loaded = load_corpus(matrix.parent / entry["corpus"])
+                if loaded.manifest_sha256 != entry["manifest_sha256"]:
+                    raise diagnostic(
+                        f"{entry['corpus']} has been re-exported since {matrix.name} was "
+                        "built — its manifest hash no longer matches the matrix row.",
+                        path=(matrix.parent / entry["corpus"]).resolve(),
+                        key="manifest_sha256",
+                        expected=f"manifest_sha256 == {entry['manifest_sha256'][:12]}… "
+                        "(the vintage the matrix was built from).",
+                        recover="rebuild the matrix with `degrade`, or re-score against "
+                        "the corpus vintage the matrix describes.",
+                    )
                 if not skip_verify:
                     verify_images(loaded)
                 for model_dir in sorted(p for p in predictions_root.iterdir() if p.is_dir()):
+                    models_found.add(model_dir.name)
                     set_dir = model_dir / entry["corpus"]
                     if not set_dir.is_dir():
                         continue
@@ -194,6 +257,19 @@ def score(
                             verified=not skip_verify,
                         )
                     )
+
+            if not rows:
+                wanted_corpora = sorted({str(e["corpus"]) for e in matrix_entries})
+                raise diagnostic(
+                    f"{predictions_root} matched no <model>/<corpus>/ pair from {matrix.name}, "
+                    "so there is nothing to write.",
+                    path=predictions_root.resolve(),
+                    key="--predictions-root",
+                    expected=f"a <model>/<corpus>/ directory for each corpus in {wanted_corpora}, "
+                    f"under one of the model directories found: {sorted(models_found) or '(none)'}.",
+                    recover="check --predictions-root and the model/corpus directory names "
+                    "against matrix.jsonl.",
+                )
         else:
             if corpus_dir is None or predictions is None:
                 raise diagnostic(
@@ -207,12 +283,13 @@ def score(
             if not skip_verify:
                 verify_images(loaded)
             loaded_predictions = load_predictions(predictions, loaded, allow_missing=allow_missing)
+            derived_family, derived_severity = derive_family_severity(corpus_dir)
             rows = score_corpus(
                 loaded,
                 loaded_predictions,
                 policy,
-                family="clean",
-                severity="none",
+                family=family if family is not None else derived_family,
+                severity=severity if severity is not None else derived_severity,
                 verified=not skip_verify,
             )
     except ScoringError as exc:
