@@ -78,10 +78,21 @@ diagnostic naming it.
 
 ## What it deliberately is not
 
-Out of scope: layout/region detection, table-structure recognition, reading-order
-labels, degraded or scanned pages as the *primary* corpus, multi-page documents,
-flowing prose, and information extraction. The transcript is a whole-page
-reading task and nothing else.
+Layout ground truth — element boxes, block categories, reading order, and
+table-structure HTML — ships alongside the transcript (see `generators/
+layout.py`, `generators/tables.py`, and "The export" below), in OmniDocBench's
+own vocabulary so a reader working in that vocabulary needs no translation
+table. Coverage is partial by design: three of OmniDocBench's eighteen block
+categories (this corpus is three Australian business document types, with no
+figures, formulas, headers, footers, page numbers, code or references), no
+`colspan`/`rowspan` (the table primitive has no merged-cell concept), and no
+formula track — therefore no OmniDocBench composite score, only the metrics
+that apply to what is actually here.
+
+Still out of scope: degraded or scanned pages as the *primary* corpus (see
+`generators/degradation/` for the optional ladders), multi-page documents,
+flowing prose, and information extraction. The transcript remains a whole-page
+reading task; layout ground truth describes the same page, not a different one.
 
 Emphasis (`**bold**`) is excluded from transcripts on purpose: the renderer knows
 what is bold, but bold detection is a typographic judgement models make
@@ -94,6 +105,8 @@ generators/      pipeline.py    the five commands
                  layout_dsl/    schema, walk engine, binding, primitives
                  transcript.py  draw-time capture and the coverage invariant
                  serialise.py   events + policy -> Markdown
+                 layout.py      events + policy -> OmniDocBench layout_dets
+                 tables.py      events + policy -> table HTML, for TEDS
                  export.py      manifest, README, directory assembly
                  degradation/   optional scan/photo degradation ladders
 config/          generation_config.yml, field_definitions.yml,
@@ -123,7 +136,9 @@ is no field-level check that catches a bad layout.
 parsing_<YYYYMMDD>/
   images/CASE001_invoices.png
   transcripts/CASE001_invoices.md
-  manifest.jsonl        {image, transcript, doc_type, sha256}
+  layout/CASE001_invoices.json
+  tables/CASE001_invoices.html      # only when the page has a table
+  manifest.jsonl        {image, transcript, doc_type, sha256, layout, [tables]}
   prompt.md
   serialisation.yml
   README.md
@@ -134,6 +149,16 @@ cannot infer the layout template before reading a pixel. The policy and the
 hashed manifest ship **with the data**: the image hashes make scoring against a
 wrong corpus vintage impossible rather than merely detectable afterwards, and
 the prompt travels alongside because prompt and ground truth are a matched pair.
+
+`layout/{stem}.json` carries OmniDocBench-shaped `layout_dets`: element boxes,
+block categories, reading order, and — for every `table` annotation — that
+table's own HTML in an `html` field. `tables/{stem}.html` is the same table
+HTML, written out separately so a TEDS scorer need not parse layout JSON to
+reach it; it is present only when the page has at least one table. **A page
+with more than one table** (14 of 165, both `anz_standard` and `anz_modern`)
+writes every table into that one `tables/{stem}.html` file, one root `<table>`
+after another in page order — `layout/{stem}.json` is authoritative per table
+when a scorer needs each one addressed on its own.
 
 ## Quality gates
 

@@ -342,16 +342,20 @@ class TranscriptDraw:
         xy = kwargs.get("xy", args[0] if args else None)
         string = _drawn_string(args, kwargs)
         font = kwargs.get("font")
-        if not (isinstance(xy, tuple) and len(xy) == 2) or font is None:
+        anchor = kwargs.get("anchor")
+        if not (isinstance(xy, tuple) and len(xy) == 2) or font is None or anchor not in (None, "la"):
             raise GeometryError(
                 "Cannot measure a text draw.\n"
                 f"  What:     draw.text() was called with args={args!r} kwargs={sorted(kwargs)}; "
-                "the position or the font could not be recovered.\n"
+                "the position or the font could not be recovered, or anchor= was not the default "
+                "top-left origin this arithmetic assumes.\n"
                 "  Where:    generators/transcript.py -> TranscriptDraw._measure\n"
                 "  Expected: draw.text((x, y), string, font=font, ...) — the shape every helper "
-                "in generators/common.py uses.\n"
-                "  Recover:  call draw.text with an (x, y) tuple and an explicit font=, or extend "
-                "_measure to handle the new call shape."
+                "in generators/common.py uses, with no anchor= or anchor='la' (the default: "
+                "left, ascender). Any other anchor moves what (x, y) means and this box math "
+                "would silently measure the wrong rectangle.\n"
+                "  Recover:  call draw.text with an (x, y) tuple, an explicit font=, and no "
+                "anchor= (or anchor='la'), or extend _measure to handle the new anchor."
             )
         x, y = int(xy[0]), int(xy[1])
         width = int(self._draw.textlength(string, font=font))

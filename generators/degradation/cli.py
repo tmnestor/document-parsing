@@ -126,7 +126,8 @@ def degrade(
     limit: Annotated[int | None, typer.Option("--limit", help="First N pages, for a smoke test.")] = None,
 ) -> None:
     """Write one complete degraded corpus per declared tier."""
-    if not (corpus / "manifest.jsonl").exists():
+    manifest_path = corpus / "manifest.jsonl"
+    if not manifest_path.exists():
         _fail(
             f"{corpus}/manifest.jsonl does not exist, so this is not an exported corpus.",
             where=str(corpus.resolve()),
@@ -136,10 +137,30 @@ def degrade(
             "an existing export.",
         )
 
+    all_records = [json.loads(line) for line in manifest_path.read_text().splitlines() if line]
+    missing_layout = [r for r in all_records if "layout" not in r]
+    if missing_layout:
+        # Reading `record["layout"]` unguarded below (mirroring the `if
+        # "tables" in record` guard that already exists) would crash mid-loop
+        # with a bare KeyError, after the first degraded JPEG had already been
+        # written — leaving a partial tier directory. Failing here, before any
+        # image is written, catches every corpus exported before layout
+        # capture in one place rather than per record.
+        _fail(
+            f"{len(missing_layout)} of {len(all_records)} row(s) in {corpus.name}/manifest.jsonl "
+            "have no 'layout' key.",
+            where=str(manifest_path.resolve()),
+            expected="every manifest row carrying a 'layout' path, written by `export` on this "
+            'branch, e.g.\n              {"image": "images/CASE001_invoices.png", '
+            '"layout": "layout/CASE001_invoices.json", ...}',
+            recover=f"re-export {corpus.name} with `python -m generators.pipeline export` — "
+            "this corpus predates layout capture, so `degrade` cannot carry through "
+            "annotations it does not have.",
+        )
+
     plan = resolve_run(config, generation_config, family=family, doc_type=doc_type, out=out)
     tiers = load_tiers(config, families=list(plan.families))
-    records = [json.loads(line) for line in (corpus / "manifest.jsonl").read_text().splitlines() if line]
-    records = [r for r in records if r["doc_type"] in plan.doc_types]
+    records = [r for r in all_records if r["doc_type"] in plan.doc_types]
     if limit:
         records = records[:limit]
     if not records:
