@@ -324,6 +324,46 @@ def carry_group_key_down(
     return carried
 
 
+class RowWidthError(ValueError):
+    """Raised when a row carries more cells than its table declares columns.
+
+    A plain `ValueError` rather than `SerialisationError`: `pad_row` is shared
+    with `generators.tables`, which raises its own `TableHtmlError`, so this
+    stays a caller-agnostic signal that each module wraps into its own
+    four-element diagnostic rather than a second implementation of padding.
+    """
+
+
+def pad_row(cells: list[str], width: int, blank: str) -> list[str]:
+    """Pad one row's cells to a table's column width.
+
+    Shared by `serialise._render_table` and `tables._render` so the Markdown
+    and HTML projections cannot compute padding two different ways and drift
+    back apart — the same shared-helper ruling already applied to `pair_text`
+    and `_join_cell` (design: one implementation of a convention, not two kept
+    in step by hand).
+
+    Args:
+        cells: The row's cell texts, in column order.
+        width: The table's column count, from `table_open`'s `columns`.
+        blank: The token a short row's missing cells are filled with.
+
+    Returns:
+        `cells` padded on the right to exactly `width` entries.
+
+    Raises:
+        RowWidthError: `cells` has more entries than `width`. Truncating
+            silently would drop a real cell rather than pad a missing one —
+            the same class of hole an earlier fix round closed for an
+            unclosed row.
+    """
+    if len(cells) > width:
+        raise RowWidthError(
+            f"a row has {len(cells)} cell(s) but the table declares {width} column(s): {cells!r}"
+        )
+    return list(cells) + [blank] * (width - len(cells))
+
+
 def _render_table(columns: list[str], rows: list[tuple[list[str], bool]], policy: dict) -> str:
     """Render captured rows as a pipe table with a header separator row.
 
@@ -350,8 +390,19 @@ def _render_table(columns: list[str], rows: list[tuple[list[str], bool]], policy
     separator = "| " + " | ".join(["---"] * width) + " |"
 
     def render(cells: list[str]) -> str:
-        padded = list(cells) + [blank] * (width - len(cells))
-        return "| " + " | ".join(padded[:width]) + " |"
+        try:
+            padded = pad_row(cells, width, blank)
+        except RowWidthError as err:
+            raise SerialisationError(
+                "Cannot render a table row.\n"
+                f"  What:     {err}\n"
+                "  Where:    generators/serialise.py -> _render_table\n"
+                "  Expected: every row's cell count to match table_open's declared columns "
+                f"({columns!r}), e.g. one cell per column.\n"
+                "  Recover:  a row emitted more cells than the table declared columns; check "
+                "the primitive that drew this row against its table_open."
+            ) from err
+        return "| " + " | ".join(padded) + " |"
 
     lines: list[str] = []
     if not rows[0][1]:

@@ -31,6 +31,15 @@ from generators.tables import TableHtmlError, table_html
 _IGNORED_CATEGORIES = frozenset({"abandon"})
 
 
+# Kinds an annotatable event may legitimately reach `_block_text` on with no
+# `event["text"]`: `pair` keeps its label/value in `meta` (joined below), and
+# `table_open`'s content lives in the table's `html` instead of `text`. Any
+# other categorised, text-less event is a kind `_block_text` has no rule for —
+# failing fast beats silently annotating it with "".
+_TEXT_IN_META: frozenset[str] = frozenset({"pair"})
+_TEXT_ELSEWHERE: frozenset[str] = frozenset({"table_open"})
+
+
 def _block_text(event: dict, policy: dict) -> str:
     """Recover the block's pre-wrap text, including a `pair`'s label and value.
 
@@ -42,18 +51,43 @@ def _block_text(event: dict, policy: dict) -> str:
     §4), not a second, independently-drifting join. Never from spans, which
     stay reserved for the post-wrap ink.
 
+    This used to default a missing `event["text"]` to `""` for any kind. That
+    silently hid one real defect — every `pair` block projected as `""`
+    through 13 green tests until a real-page check caught it — and would hide
+    the same failure for the next event kind that keeps its text in `meta`.
+    Failing fast on the unknown case converts that into a loud error instead.
+
     Args:
         event: One event dict.
         policy: The validated serialisation policy (§`load_serialisation_policy`).
 
     Returns:
-        The block's text, or "" when the event carries none (e.g. `table`,
-        whose content lives in `html` instead).
+        The block's text, or "" for `table_open`, whose content lives in
+        `html` instead.
+
+    Raises:
+        LayoutError: A categorised event carries no `text` and is not one of
+            the known kinds (`pair`, `table_open`) that keep it elsewhere.
     """
     text = event.get("text")
-    if text is None and event.get("kind") == "pair":
-        text = pair_text(event.get("meta") or {}, policy)
-    return text or ""
+    if text is not None:
+        return text
+    kind = event.get("kind")
+    if kind in _TEXT_IN_META:
+        return pair_text(event.get("meta") or {}, policy)
+    if kind in _TEXT_ELSEWHERE:
+        return ""
+    raise _err(
+        f"seq {event.get('seq')} (kind={kind!r}, category={event.get('category_type')!r}) "
+        "carries no text and is not a kind known to keep its text elsewhere.",
+        key=f"seq {event.get('seq')}",
+        expected="a categorised event to carry `text` directly, or be kind 'pair' (joined from "
+        "meta.label/meta.value) or 'table_open' (content lives in the table's html), e.g.\n"
+        '              {"kind": "line", "text": "Total: $157.39", "category_type": "text_block"}',
+        recover="emit the event with its resolved text, or if this is a new event kind that "
+        "keeps its text elsewhere, add it to generators/layout.py's _TEXT_IN_META or "
+        "_TEXT_ELSEWHERE and teach _block_text how to recover it.",
+    )
 
 
 class LayoutError(RuntimeError):
@@ -139,7 +173,7 @@ def layout_dets(events: list[dict], *, attribute: dict, policy: dict) -> dict:
             gap (spec §9.4).
     """
     try:
-        tables = iter(table_html(events))
+        tables = iter(table_html(events, policy))
     except TableHtmlError as err:
         # Raised immediately, naming the real defect (the unclosed table_open
         # or row_open `table_html` found), rather than deferred to whichever
@@ -168,10 +202,20 @@ def layout_dets(events: list[dict], *, attribute: dict, policy: dict) -> dict:
             "text": _block_text(event, policy),
             "ignore": category in _IGNORED_CATEGORIES,
             "attribute": dict(attribute),
-            "line_with_spans": [
-                {"category_type": SPAN_CATEGORY, "poly": list(s["poly"]), "text": s["text"]}
-                for s in event.get("spans", [])
-            ],
+            # Table cells get no boxes (spec §3.3): a table's spans exist so
+            # `enclose` can compose the table's own poly from its cells' ink,
+            # not to be projected as per-cell text_spans — a cba_standard
+            # table annotation would otherwise carry 105 of them, 78% of the
+            # file, and OmniDocBench readers would need a translation table
+            # for a text_span sitting inside a table rather than a text block.
+            "line_with_spans": (
+                []
+                if category == "table"
+                else [
+                    {"category_type": SPAN_CATEGORY, "poly": list(s["poly"]), "text": s["text"]}
+                    for s in event.get("spans", [])
+                ]
+            ),
         }
         if category == "table":
             det["html"] = next(tables, "")

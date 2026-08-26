@@ -209,9 +209,16 @@ never recovered by OCR or by hand.
 | --- | --- |
 | `images/` | One pristine page render per case. |
 | `transcripts/` | The canonical transcript for each page, same stem. |
-| `manifest.jsonl` | One row per case: image, transcript, doc_type, sha256. |
+| `layout/` | OmniDocBench-shaped `layout_dets` per page: boxes, categories, reading order. |
+| `tables/` | Table HTML for TEDS, one file per page with a table (absent otherwise). |
+| `manifest.jsonl` | One row per case: image, transcript, doc_type, sha256, layout, tables. |
 | `prompt.md` | The prompt these transcripts assume. |
 | `serialisation.yml` | The exact policy that produced these transcripts. |
+
+A page with more than one table (14 of 165) writes every table into that one
+`tables/{{stem}}.html` file, one root `<table>` after another in page order.
+`layout/{{stem}}.json` is authoritative per table in that case — each `table`
+annotation there carries its own `html`.
 
 ## Verify before you score
 
@@ -280,7 +287,9 @@ def export_corpus(
         The created export root.
 
     Raises:
-        ExportError: An image, transcript, the policy or the prompt is missing.
+        ExportError: An image, transcript, the policy or the prompt is missing,
+            or a non-empty event stream yields zero layout annotations (a
+            record carried over from before layout capture).
         LayoutError: A page's annotations cannot be trusted — a degenerate
             box, an incomplete reading order, or an unbalanced table stream.
     """
@@ -323,12 +332,34 @@ def export_corpus(
             "tier": "clean",
         }
         annotations = layout_dets(record["events"], attribute=attribute, policy=policy)
+        if record["events"] and not annotations["layout_dets"]:
+            # `_merge_event_records` (pipeline.py) deliberately carries a
+            # record over from an earlier `generate` run when its image is
+            # still on disk. A record captured before this branch has events
+            # but no `category_type` on any of them, so `layout_dets` returns
+            # `{"layout_dets": []}` — a page that would ship an empty layout
+            # file beside a populated table file, with the manifest
+            # advertising both. Every real page in this corpus produces at
+            # least 7 annotations, so a non-empty stream with zero is
+            # unambiguous.
+            raise ExportError(
+                "Cannot export: a record's event stream yields zero layout annotations.\n"
+                f"  What:     {stem} ({doc_type}) carries {len(record['events'])} event(s) but "
+                "0 layout_dets.\n"
+                f"  Where:    {transcripts_dir.parent / 'events.jsonl'} -> case_id="
+                f"{record.get('case_id')!r}, doc_type={doc_type!r}\n"
+                "  Expected: a non-empty event stream to carry a category_type on at least one "
+                'event, e.g.\n              {"kind": "title", "category_type": "title", ...}\n'
+                "  Recover:  re-run `python -m generators.pipeline generate` for this case — "
+                "this record predates layout capture, so its events carry no category_type and "
+                "export cannot derive annotations for it."
+            )
         (root / "layout" / f"{stem}.json").write_text(
             json.dumps(annotations, indent=2) + "\n", encoding="utf-8"
         )
         row["layout"] = f"layout/{stem}.json"
 
-        tables = table_html(record["events"])
+        tables = table_html(record["events"], policy)
         if tables:
             (root / "tables").mkdir(parents=True, exist_ok=True)
             (root / "tables" / f"{stem}.html").write_text("\n".join(tables) + "\n", encoding="utf-8")

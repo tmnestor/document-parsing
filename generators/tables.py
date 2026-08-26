@@ -1,9 +1,19 @@
 """Captured table events to HTML, for TEDS.
 
-A pure function of the event stream, like `serialise` — it imports no PIL and
-renders nothing, so the convention can change and every table re-emit in seconds
-without re-rendering an image (design §6 of the original spec, applied to a
-third projection).
+A pure function of the event stream **and the serialisation policy**, like
+`serialise` — it imports no PIL and renders nothing, so the convention can
+change and every table re-emit in seconds without re-rendering an image
+(design §6 of the original spec, applied to a third projection).
+
+Taking the policy is not optional: a page draws a date-grouped table's date
+once, and `serialise._render_table` carries that date onto every row of the
+group (`carry_group_key_down`) so a reader never needs a row that means
+"repeat the row above". Without the same policy, this module's HTML disagreed
+with the Markdown transcript on which cells hold a date — 34 of 55 bank
+statements, corpus-wide — and disagreed with `config/prompt.md`'s own
+instruction to the model. `carry_group_key_down` and `_join_cell` are imported
+from `serialise.py` rather than re-implemented, the same shared-helper ruling
+already applied to `pair_text`.
 
 TEDS is defined over an HTML tree (Zhong et al., arXiv:1911.10683), so HTML is
 the form that gets emitted. OmniDocBench also carries a `latex` field and marks
@@ -16,6 +26,8 @@ with subsystem B.
 """
 
 import html as html_escape
+
+from generators.serialise import RowWidthError, _join_cell, carry_group_key_down, pad_row
 
 _CELL_JOIN = " "
 
@@ -38,17 +50,21 @@ def _err(what: str, *, seq: int | None) -> TableHtmlError:
     )
 
 
-def table_html(events: list[dict]) -> list[str]:
+def table_html(events: list[dict], policy: dict) -> list[str]:
     """Render every table in an event stream as an HTML table.
 
     Args:
         events: One page's events, as stored in `events.jsonl`.
+        policy: The validated serialisation policy (§`load_serialisation_policy`)
+            — the same one `serialise.serialise` used to produce this page's
+            Markdown transcript, so the two projections state one ground truth.
 
     Returns:
         One HTML string per table, in walk order. Empty when the page has none.
 
     Raises:
-        TableHtmlError: A table is not closed, or a row is not closed.
+        TableHtmlError: A table is not closed, a row is not closed, or a row
+            carries more cells than the table declares columns.
     """
     tables: list[str] = []
     rows: list[tuple[list[str], bool]] = []
@@ -69,7 +85,7 @@ def table_html(events: list[dict]) -> list[str]:
             row, keys, is_header = [], [], False
             open_row_seq = int(event["seq"])
         elif kind == "cell":
-            row.append(str(event["text"] or ""))
+            row.append(_join_cell(str(event["text"] or policy["empty_cell_token"]), policy))
             keys.append(str(meta.get("column_key", "")))
             is_header = is_header or bool(meta.get("header"))
         elif kind == "cell_sub_line":
@@ -91,7 +107,7 @@ def table_html(events: list[dict]) -> list[str]:
         elif kind == "table_close":
             if open_row_seq is not None:
                 raise _err("a row_open has no matching row_close.", seq=open_row_seq)
-            tables.append(_render(rows, table_columns))
+            tables.append(_render(rows, table_columns, policy))
             rows, open_seq, table_columns = [], None, []
 
     if open_seq is not None:
@@ -101,23 +117,37 @@ def table_html(events: list[dict]) -> list[str]:
     return tables
 
 
-def _render(rows: list[tuple[list[str], bool]], columns: list[str]) -> str:
+def _render(rows: list[tuple[list[str], bool]], columns: list[str], policy: dict) -> str:
     """Render collected rows as one HTML table.
 
     Args:
         rows: Each row's cell texts, and whether it is a header row.
         columns: Column keys from table_open metadata.
+        policy: The validated serialisation policy — `carry_group_key_down` is
+            applied under the same `carry_group_key` setting `serialise.py`
+            reads, so a date-grouped table states one ground truth in both
+            projections rather than two that disagree on which cells hold a
+            date.
 
     Returns:
         The table's HTML, header rows in `<thead>` and the rest in `<tbody>`.
         Every row is padded to match the column count.
+
+    Raises:
+        TableHtmlError: A row carries more cells than `columns` declares.
     """
+    if policy["carry_group_key"] == "down":
+        rows = carry_group_key_down(rows)
+
     width = len(columns)
-    blank = ""
+    blank = policy["empty_cell_token"]
 
     def padded_cells(cells: list[str]) -> list[str]:
-        """Pad cells to match table width."""
-        return (cells + [blank] * (width - len(cells)))[:width]
+        """Pad cells to match table width, or fail fast on an over-long row."""
+        try:
+            return pad_row(cells, width, blank)
+        except RowWidthError as err:
+            raise _err(f"a table row cannot be rendered: {err}", seq=None) from err
 
     head = "".join(_row(padded_cells(cells), "th") for cells, header in rows if header)
     body = "".join(_row(padded_cells(cells), "td") for cells, header in rows if not header)
