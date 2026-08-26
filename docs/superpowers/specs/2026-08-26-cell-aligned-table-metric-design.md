@@ -318,10 +318,24 @@ test, so the blindness cannot return unnoticed.
 **Verify against all 165 real transcripts, not only constructed fixtures.**
 A transcript scored against *itself* must yield `table_cell_error_rate == 0.0`,
 `table_rows_missing == 0` and `table_rows_spurious == 0` on every one of the
-165 pages. This is the single most valuable test in the suite: it exercises
-every real table shape — headerless receipts, date-grouped statements, the
-two-table ANZ layouts — and it is exactly the check that would have caught the
-`headerless_table` defect that three reviews missed on the previous branch.
+165 pages, exercising every real table shape — headerless receipts,
+date-grouped statements, the two-table ANZ layouts. This proves the metric
+runs without crashing and is deterministic across real input, and no more:
+self-comparison is trivially satisfied by any deterministic parse regardless
+of whether that parse is *correct*, so on its own it would **not** have caught
+the `headerless_table` defect that three reviews missed on the previous
+branch — a reviewer of this design demonstrated that directly, by mutating
+the empty-header rule and watching self-comparison pass unchanged on all 165
+pages. Catching that class of defect needs a check with a known-correct
+answer that differs from its input: pin `parse_tables`'s shape against the
+corpus (table count, headerless-table count, row count, cell count, and a
+zero ragged-row count, each computed independently from the corpus rather
+than asserted from memory), and perturb a real page in a way whose correct
+score is known in advance — dropping the final row of a page's final table
+must be reported as exactly one missing row on every one of the 165 pages.
+Together these three checks — self-comparison, the pinned parse invariants,
+and the row-drop perturbation — are what a real page can offer that a
+hand-written fixture cannot.
 
 A unit test that passes on a hand-written fixture while failing on a real page
 is the dominant failure mode of this codebase, recorded five times in
