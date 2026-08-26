@@ -253,7 +253,11 @@ class TableBuilder:
         elif kind == "table_close":
             if self._open_row_seq is not None:
                 raise _err("a row_open has no matching row_close.", seq=self._open_row_seq)
-            html = _render(self._rows, self._columns, self._policy)
+            # A table that captured no rows drew no rows of ink. Rendering an
+            # empty <table> would ask a model to transcribe markup for content
+            # the page does not show, so both projections skip it — the rule
+            # `serialise` has always applied, now applied to `tables` too.
+            html = _render(self._rows, self._columns, self._policy) if self._rows else None
             self._rows, self._open_seq, self._columns = [], None, []
             return html
         return None
