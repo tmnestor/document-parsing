@@ -121,9 +121,20 @@ the block. `split_divider_color` is already `"black"` (`:86`).
 ### 3.3 Fit budgets must be re-declared
 
 This is the one non-obvious requirement. The existing party budgets declare
-`width: 1700` (`:25-29`) because the blocks span the full content width. In a
-820px column that budget is wrong — text would be measured against a width it
-does not have, and `shrink_then_wrap` would fail to shrink text that overflows.
+`width: 1700` (`:25-29`) because the blocks span the full content width.
+CORRECTED (fix wave, 2026-08-26): in an 820px column that number does not
+render badly — it fails a static schema precondition instead. Every
+text/pair block's declared budget width is checked against the region it
+draws into by `_validate_text_budget`
+(`generators/layout_dsl/schema.py:1346-1374`), and `validate` raises before a
+pixel is drawn if the budget exceeds it, e.g.:
+
+```
+What:     budget 'SUPPLIER_NAME' declares width 1700px but this block's region is only 820px.
+Where:    config/layouts/invoices.yml -> tax_invoice_parties_split.body[2].children[0][0].budget
+Expected: field_budgets.SUPPLIER_NAME.width <= 820.
+Recover:  set field_budgets.SUPPLIER_NAME.width to 820 or less, or widen the region this block draws into.
+```
 
 The new layouts therefore declare their own budget entries at the column
 width, keeping the existing `fit`, `min_font` and `max_lines` values so the

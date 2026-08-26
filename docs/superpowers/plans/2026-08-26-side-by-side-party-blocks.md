@@ -26,9 +26,24 @@ instruction all already exist; this adds only YAML.
   already say what is needed; changing either would re-vintage every transcript.
 - **All 165 pre-existing pages must stay byte-identical.**
   `tests/test_corpus_unchanged.py` is the guard and must stay green.
-- **Never run `generate` or `export` without passing `--output` AND `--derived`
-  explicitly** unless the task says to write to the real corpus. A previous
-  agent overwrote the shipped corpus by omitting them.
+- **Never run `generate` without passing `--output` AND `--derived` explicitly**
+  unless the task says to write to the real corpus. A previous agent
+  overwrote the shipped corpus by omitting them.
+- **CORRECTED (fix wave, 2026-08-26): for `export`, `--output` and `--derived`
+  are sources only.** They tell `export` where to read rendered images and
+  captured events from (`generators/pipeline.py:463-464`); they do **not**
+  redirect where it writes. The write destination is a third flag,
+  **`--target`**, which defaults to `cfg["exports_dir"]` inside the real,
+  shipped data root (`generators/pipeline.py:469`) — so passing only
+  `--output`/`--derived`, as the bullet above previously instructed for both
+  commands, still writes the export into the real corpus. Always pass
+  `--target` explicitly when exporting to scratch. Separately, `export` has
+  no guard against an existing destination: it builds `parsing_{date_stamp}`
+  with `mkdir(exist_ok=True)` and plain `write_text`
+  (`generators/export.py:307-310`), so running `export` twice on the same
+  calendar day — even with `--target` set correctly — silently overwrites the
+  prior export's `images/`, `transcripts/`, `layout/`, `tables/`,
+  `manifest.jsonl` and `README.md` in place.
 - Every primitive parameter needs an explicit value in the layout YAML
   (`generators/layout_dsl/defaults.py`); a missing one is a render-time error,
   not a fallback.
@@ -78,10 +93,14 @@ Nothing else changes.
 
 **Why the budgets must be re-declared.** The existing party budgets declare
 `width: 1700` because those blocks span the full content box. Inside an 820px
-column that number is wrong: text is measured against a width it does not
-have, so `shrink_then_wrap` will not shrink text that overflows. This renders
-without raising and looks wrong, which is exactly the class of defect Task 3
-exists to catch.
+column that number is wrong, but CORRECTED (fix wave, 2026-08-26): the failure
+is not a silent render-time defect. `_validate_text_budget`
+(`generators/layout_dsl/schema.py:1346-1374`) checks every text/pair block's
+declared budget width against the region it draws into, and `validate` raises
+a fail-fast diagnostic before a single pixel is drawn if the budget exceeds
+its region — this is a static schema precondition, not something Task 3's
+visual check would need to catch. Re-declaring the four party budgets at
+820px is what lets `validate` pass for the two new layouts at all.
 
 - [ ] **Step 1: Add the split-column budgets anchor**
 
