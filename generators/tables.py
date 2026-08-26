@@ -25,12 +25,15 @@ the form that gets emitted. OmniDocBench also carries a `latex` field and marks
 both optional; it is left absent here because nothing scores it and two
 statements of one structure drift (design §5).
 
-No `colspan` or `rowspan`: the table primitive has no merged-cell concept, so
-every table is a uniform grid and the attributes would be constant. They arrive
-with subsystem B.
+`colspan` and `rowspan` arrive from the table primitive as cell metadata and
+are written only when they exceed one, so a table with no merged cells renders
+exactly as it did before merged cells existed. Counting is span-aware
+throughout: a row is full when its own colspans plus the columns it inherited
+from a `rowspan` above reach the column count.
 """
 
 import html as html_escape
+from typing import NamedTuple
 
 from generators.decoration import strip_decoration_run
 
@@ -66,6 +69,21 @@ def _err(
     )
 
 
+class Cell(NamedTuple):
+    """One table cell: its text and how far it spans.
+
+    Text and span travel together in one record rather than in parallel lists,
+    for the reason the HTML format change was largely about: two structures
+    that must agree are two structures that eventually do not. A cell that
+    spans nothing carries the defaults and renders exactly as a bare string
+    always did.
+    """
+
+    text: str
+    colspan: int = 1
+    rowspan: int = 1
+
+
 def _join_cell(text: str, policy: dict) -> str:
     """Fold an authored line break inside a cell onto one line.
 
@@ -76,8 +94,8 @@ def _join_cell(text: str, policy: dict) -> str:
 
 
 def carry_group_key_down(
-    rows: list[tuple[list[str], bool]],
-) -> list[tuple[list[str], bool]]:
+    rows: list[tuple[list[Cell], bool]],
+) -> list[tuple[list[Cell], bool]]:
     """Carry a grouped date onto every row of its group, so each row stands alone.
 
     The corpus draws a date group two ways, and which one a page gets is a
@@ -113,8 +131,8 @@ def carry_group_key_down(
     Returns:
         The rows with the group key carried onto every row of its group.
     """
-    carried: list[tuple[list[str], bool]] = []
-    pending: tuple[list[str], bool] | None = None
+    carried: list[tuple[list[Cell], bool]] = []
+    pending: tuple[list[Cell], bool] | None = None
     pending_used = False
     last_key = ""
 
@@ -124,7 +142,7 @@ def carry_group_key_down(
             continue
 
         is_group_header = (
-            bool(cells) and bool(cells[0].strip()) and not any(cell.strip() for cell in cells[1:])
+            bool(cells) and bool(cells[0].text.strip()) and not any(cell.text.strip() for cell in cells[1:])
         )
         if is_group_header:
             # A header that headed nothing is kept rather than lost: it is the
@@ -132,16 +150,19 @@ def carry_group_key_down(
             if pending is not None and not pending_used:
                 carried.append(pending)
             pending, pending_used = (cells, was_header), False
-            last_key = cells[0]
+            last_key = cells[0].text
             continue
 
-        if cells and not cells[0].strip():
+        if cells and not cells[0].text.strip():
             if last_key.strip():
-                cells = [last_key, *cells[1:]]
+                # `_replace` rather than a fresh Cell: the carried date inherits
+                # whatever span the blank cell had, so a merged column stays
+                # merged when its text is filled in.
+                cells = [cells[0]._replace(text=last_key), *cells[1:]]
                 if pending is not None:
                     pending_used = True
         elif cells:
-            last_key = cells[0]
+            last_key = cells[0].text
         carried.append((cells, was_header))
 
     if pending is not None and not pending_used:
@@ -159,31 +180,48 @@ class RowWidthError(ValueError):
     """
 
 
-def pad_row(cells: list[str], width: int, blank: str) -> list[str]:
+def row_width(cells: list[Cell]) -> int:
+    """How many columns a row's cells occupy, counting spans.
+
+    Args:
+        cells: The row's cells, in column order.
+
+    Returns:
+        The sum of the cells' `colspan`.
+    """
+    return sum(cell.colspan for cell in cells)
+
+
+def pad_row(cells: list[Cell], width: int, blank: str, *, occupied: int = 0) -> list[Cell]:
     """Pad one row's cells to a table's column width.
 
     The single implementation of padding, used by every table projection so
     they cannot compute it two different ways and drift apart.
 
+    Counting is span-aware: a row is full when its own colspans plus the
+    columns it inherited from `rowspan` cells above reach `width`. Counting
+    cells instead would pad a spanning row to too many columns — well-formed
+    HTML stating the wrong thing.
+
     Args:
-        cells: The row's cell texts, in column order.
+        cells: The row's cells, in column order.
         width: The table's column count, from `table_open`'s `columns`.
         blank: The token a short row's missing cells are filled with.
+        occupied: Columns already owned by a `rowspan` cell in an earlier row,
+            which this row does not carry a cell for.
 
     Returns:
-        `cells` padded on the right to exactly `width` entries.
+        `cells` padded on the right so the row occupies exactly `width`.
 
     Raises:
-        RowWidthError: `cells` has more entries than `width`. Truncating
-            silently would drop a real cell rather than pad a missing one —
-            the same class of hole an earlier fix round closed for an
-            unclosed row.
+        RowWidthError: The row occupies more than `width`. Truncating silently
+            would drop a real cell rather than pad a missing one — the same
+            class of hole an earlier fix round closed for an unclosed row.
     """
-    if len(cells) > width:
-        raise RowWidthError(
-            f"a row has {len(cells)} cell(s) but the table declares {width} column(s): {cells!r}"
-        )
-    return list(cells) + [blank] * (width - len(cells))
+    filled = row_width(cells) + occupied
+    if filled > width:
+        raise RowWidthError(f"a row occupies {filled} column(s) but the table declares {width}: {cells!r}")
+    return list(cells) + [Cell(blank)] * (width - filled)
 
 
 class TableBuilder:
@@ -207,8 +245,8 @@ class TableBuilder:
         policy: The validated serialisation policy.
         """
         self._policy = policy
-        self._rows: list[tuple[list[str], bool]] = []
-        self._row: list[str] = []
+        self._rows: list[tuple[list[Cell], bool]] = []
+        self._row: list[Cell] = []
         self._keys: list[str] = []
         self._is_header = False
         self._columns: list[str] = []
@@ -238,7 +276,11 @@ class TableBuilder:
             self._open_row_seq = int(event["seq"])
         elif kind == "cell":
             self._row.append(
-                _join_cell(str(event["text"] or self._policy["empty_cell_token"]), self._policy)
+                Cell(
+                    _join_cell(str(event["text"] or self._policy["empty_cell_token"]), self._policy),
+                    int(meta.get("colspan", 1) or 1),
+                    int(meta.get("rowspan", 1) or 1),
+                )
             )
             self._keys.append(str(meta.get("column_key", "")))
             self._is_header = self._is_header or bool(meta.get("header"))
@@ -289,7 +331,8 @@ class TableBuilder:
         join = self._policy["cell_sub_line_join"]
         if key in self._keys:
             position = self._keys.index(key)
-            self._row[position] = f"{self._row[position]}{join}{content}"
+            cell = self._row[position]
+            self._row[position] = cell._replace(text=f"{cell.text}{join}{content}")
         elif self._rows and key in self._columns:
             # Defensive only: `_draw_sub_lines` (primitives_table.py:870) always
             # emits cell_sub_line before that row's row_close, so this branch is
@@ -297,7 +340,8 @@ class TableBuilder:
             position = self._columns.index(key)
             cells, _header = self._rows[-1]
             if position < len(cells):
-                cells[position] = f"{cells[position]}{join}{content}"
+                cell = cells[position]
+                cells[position] = cell._replace(text=f"{cell.text}{join}{content}")
 
 
 def table_html(events: list[dict], policy: dict) -> list[str]:
@@ -350,6 +394,21 @@ def _check_header_shape(rows: list[tuple[list[str], bool]]) -> None:
     Raises:
         TableHtmlError: A `header=True` row follows a `header=False` row.
     """
+    header_widths = [row_width(cells) for cells, is_header in rows if is_header]
+    if len(set(header_widths)) > 1:
+        raise _err(
+            f"the header tiers occupy different numbers of columns: {header_widths}.",
+            seq=None,
+            expected="every header tier to occupy the same number of columns, counting "
+            "colspan — a ragged tier is a table no metric can align, e.g. a 3-column "
+            "table whose tiers are\n"
+            '              [Cell("", 1), Cell("Amount", 2)] and '
+            '[Cell("Date"), Cell("Debit"), Cell("Credit")]',
+            recover="fix the `header_groups:` spans in the layout so they tile the "
+            "table's columns exactly — every column covered once, no gaps and no "
+            "overlaps.",
+        )
+
     seen_non_header = False
     for index, (_cells, is_header) in enumerate(rows):
         if not is_header:
@@ -372,11 +431,47 @@ def _check_header_shape(rows: list[tuple[list[str], bool]]) -> None:
             )
 
 
-def _render(rows: list[tuple[list[str], bool]], columns: list[str], policy: dict) -> str:
+def inherited_columns(rows: list[tuple[list[Cell], bool]], width: int) -> list[int]:
+    """How many columns each row inherits from `rowspan` cells above it.
+
+    A cell with `rowspan="3"` owns its column on the two rows beneath it, and
+    those rows carry no cell for it. Padding that ignored this would top the
+    spanned rows back up to the full column count, shifting every later column
+    one place left — well-formed HTML stating the wrong thing, which no cell
+    comparison would flag because every cell is individually plausible.
+
+    Columns are tracked positionally, walking each row left to right and
+    skipping positions still owned from above, which is how a browser resolves
+    the same markup.
+
+    Args:
+        rows: (cells, was_header) per row, in order.
+        width: The table's column count.
+
+    Returns:
+        One count per row, in the same order.
+    """
+    remaining = [0] * width
+    inherited: list[int] = []
+    for cells, _was_header in rows:
+        inherited.append(sum(1 for count in remaining if count > 0))
+        remaining = [max(0, count - 1) for count in remaining]
+        position = 0
+        for cell in cells:
+            while position < width and remaining[position] > 0:
+                position += 1
+            for offset in range(cell.colspan):
+                if position + offset < width:
+                    remaining[position + offset] = max(remaining[position + offset], cell.rowspan - 1)
+            position += cell.colspan
+    return inherited
+
+
+def _render(rows: list[tuple[list[Cell], bool]], columns: list[str], policy: dict) -> str:
     """Render collected rows as one HTML table.
 
     Args:
-        rows: Each row's cell texts, and whether it is a header row.
+        rows: Each row's cells, and whether it is a header row.
         columns: Column keys from table_open metadata.
         policy: The validated serialisation policy — `carry_group_key_down` is
             applied under the same `carry_group_key` setting `serialise.py`
@@ -402,25 +497,33 @@ def _render(rows: list[tuple[list[str], bool]], columns: list[str], policy: dict
 
     width = len(columns)
     blank = policy["empty_cell_token"]
+    inherited = inherited_columns(rows, width)
 
-    def padded_cells(cells: list[str]) -> list[str]:
+    def padded_cells(cells: list[Cell], occupied: int = 0) -> list[Cell]:
         """Pad cells to match table width, or fail fast on an over-long row."""
         try:
-            return pad_row(cells, width, blank)
+            return pad_row(cells, width, blank, occupied=occupied)
         except RowWidthError as err:
             raise _err(f"a table row cannot be rendered: {err}", seq=None) from err
 
     if rows and not rows[0][1]:
         # Headerless on the page (several receipt layouts set `header:
-        # false`): `serialise._render_table` inserts a blank header row under
-        # `headerless_table: empty_header_row` so a pipe table's first line
-        # is never mistaken for column names. Mirrored here so the two
-        # projections keep the same row count and the same structure, not an
-        # HTML table missing a `<thead>` a Markdown reader would see.
+        # false`): a blank header row is inserted under
+        # `headerless_table: empty_header_row` so the first line of data is
+        # never mistaken for column names, and so the transcript and this
+        # projection keep the same row count and the same structure.
         head = _row(padded_cells([]), "th")
     else:
-        head = "".join(_row(padded_cells(cells), "th") for cells, header in rows if header)
-    body = "".join(_row(padded_cells(cells), "td") for cells, header in rows if not header)
+        head = "".join(
+            _row(padded_cells(cells, inherited[index]), "th")
+            for index, (cells, header) in enumerate(rows)
+            if header
+        )
+    body = "".join(
+        _row(padded_cells(cells, inherited[index]), "td")
+        for index, (cells, header) in enumerate(rows)
+        if not header
+    )
     parts = ["<table>"]
     if head:
         parts.append(f"<thead>{head}</thead>")
@@ -430,15 +533,25 @@ def _render(rows: list[tuple[list[str], bool]], columns: list[str], policy: dict
     return "".join(parts)
 
 
-def _row(cells: list[str], tag: str) -> str:
+def _row(cells: list[Cell], tag: str) -> str:
     """Render one row, escaping every cell.
 
     Args:
-        cells: The row's cell texts.
+        cells: The row's cells.
         tag: `th` for a header row, `td` otherwise.
 
     Returns:
         The row's HTML. An empty cell keeps its element, so the column count
         survives — dropping it would shift every later column left.
     """
-    return "<tr>" + "".join(f"<{tag}>{html_escape.escape(c)}</{tag}>" for c in cells) + "</tr>"
+    parts = []
+    for cell in cells:
+        # A span of one writes no attribute, so every table without merged
+        # cells renders byte-identically to before merged cells existed.
+        attrs = "".join(
+            f' {name}="{value}"'
+            for name, value in (("colspan", cell.colspan), ("rowspan", cell.rowspan))
+            if value != 1
+        )
+        parts.append(f"<{tag}{attrs}>{html_escape.escape(cell.text)}</{tag}>")
+    return "<tr>" + "".join(parts) + "</tr>"
