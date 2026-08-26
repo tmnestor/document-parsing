@@ -1,14 +1,49 @@
+# One environment. Everything the corpus needs: rendering, degradation, tests.
+#
+# AUGRAPHY IS NOT LISTED HERE. It declares `opencv-python` — the full GUI
+# build — as a hard requirement, which would displace the headless build
+# pinned below. Both provide `cv2`, and having both installed is a coin toss
+# over which one wins: 2 of 9 degraded images come out different, and
+# generators/degradation/geometry.py refuses to run in that state rather than
+# writing a corpus that will not reproduce. `build_corpus.sh` installs it with
+# --no-deps and verifies the result; conda's pip: section applies flags to the
+# whole invocation, so it cannot be scoped to one package here.
+#
+# PINS ARE EXACT, NOT PREFERENCES. Degraded images are corpus data: their
+# hashes go in a manifest, and a version bump that shifts one pixel
+# invalidates every prediction made against the old images. numpy is
+# additionally capped by numba, which augraphy imports.
 name: docparse
+
 channels:
   - conda-forge
+
 dependencies:
   - python=3.12
-  - pillow
-  - pyyaml
-  - typer
-  - rich
-  - faker
-  - pytest
-  - pytest-cov
-  - ruff
-  - mypy
+  - pip
+  - pip:
+      - Pillow==12.2.0
+      - PyYAML==6.0.3
+      - typer==0.27.1
+      - rich==14.3.0
+      - faker
+
+      # Degradation. augraphy itself is installed by build_corpus.sh, with
+      # --no-deps, so its real runtime imports have to be listed here by hand.
+      # `requests` and `matplotlib` are both actually imported at
+      # `import augraphy` time (figsharedownloader.py, scribbles.py) even
+      # though neither does anything for this corpus — verified by importing
+      # augraphy against this file with nothing else installed.
+      - numpy==2.3.5
+      - opencv-python-headless==4.13.0.92
+      - numba==0.66.0
+      - scikit-image
+      - scikit-learn
+      - requests
+      - matplotlib
+
+      # Tooling.
+      - pytest
+      - pytest-cov
+      - ruff
+      - mypy
