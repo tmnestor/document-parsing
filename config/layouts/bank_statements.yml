@@ -38,6 +38,11 @@ _dsl_defaults_values: &dsl_defaults_values
   table_dividers: []
   table_offset_y: 0
   table_sub_line_height: 0
+  # Merged cells (B2). Declared explicitly rather than defaulted in Python:
+  # reading this file alone must answer what the layout is configured to do.
+  # `[]` means no spanning header tier; `none` means no merged row label.
+  table_header_groups: []
+  table_row_span_key: none
   banner_text_color: "white"
   banner_text_y: 0
   banner_role: header

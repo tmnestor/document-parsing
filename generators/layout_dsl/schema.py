@@ -119,6 +119,8 @@ PRIMITIVES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "cell_line_spacing",
             "group_gap",
             "synthetic_row_placement",
+            "header_groups",
+            "row_span_key",
             "header_rule_top",
             "header_rule_gap",
             "family",
@@ -725,6 +727,94 @@ def _validate_table(block: dict, *, known_fields: set[str], layout_path: str, ke
                 expected="x: <offset from region left> or x_right: <offset from region right>.",
                 recover="add x: or x_right: to position the divider, e.g. {x_right: -320}.",
             )
+
+    _validate_merged_cells(block, layout_path=layout_path, key_path=key_path)
+
+
+def _validate_merged_cells(block: dict, *, layout_path: str, key_path: str) -> None:
+    """Check a table's spanning header and merged row label against its columns.
+
+    `header_groups` spans name column **keys**, not counts, so `colspan` is
+    derived and a typo is caught here rather than producing a table that is
+    well-formed and wrong. The groups must tile the columns exactly — every
+    column covered once, in order — which is what keeps the header tier
+    rectangular; `tables._check_header_shape` rejects a ragged tier at render
+    time, but a layout should never get that far.
+
+    Args:
+        block: The table block.
+        layout_path: The layout file, for the diagnostic.
+        key_path: The block's dotted path, for the diagnostic.
+
+    Raises:
+        LayoutSchemaError: A span names an unknown column, the groups do not
+            tile the columns in order, a span is empty, or `row_span_key` names
+            no declared column.
+    """
+    keys = [str(column["key"]) for column in block["columns"]]
+    groups = block.get("header_groups", [])
+    example = (
+        "spans naming column keys, tiling the columns in order, e.g.\n"
+        f"              header_groups:\n"
+        f"                - {{label: '', span: [{keys[0]}]}}"
+    )
+
+    covered: list[str] = []
+    for index, group in enumerate(groups):
+        if not isinstance(group, dict) or "label" not in group or "span" not in group:
+            raise _err(
+                f"header group {index} is not a {{label, span}} mapping.",
+                layout_path=layout_path,
+                key_path=f"{key_path}.header_groups[{index}]",
+                expected=example,
+                recover="give the group both a label: and a span: naming column keys.",
+            )
+        span = group["span"]
+        if not isinstance(span, list) or not span:
+            raise _err(
+                f"header group {index} ('{group['label']}') has an empty span.",
+                layout_path=layout_path,
+                key_path=f"{key_path}.header_groups[{index}].span",
+                expected="a non-empty list of column keys, e.g. span: [debit, credit].",
+                recover="name at least one column in the span, or delete the group.",
+            )
+        for name in span:
+            if str(name) not in keys:
+                raise _err(
+                    f"header group {index} spans '{name}', which is not a column of this table.",
+                    layout_path=layout_path,
+                    key_path=f"{key_path}.header_groups[{index}].span",
+                    expected=f"column keys drawn from {keys}.",
+                    recover=f"correct '{name}' to one of the table's declared column keys.",
+                )
+        covered.extend(str(name) for name in span)
+
+    if groups and covered != keys:
+        missing = [key for key in keys if key not in covered]
+        repeated = sorted({key for key in covered if covered.count(key) > 1})
+        if missing:
+            detail = f"column(s) {missing} are covered by no header group"
+        elif repeated:
+            detail = f"column(s) {repeated} are covered by more than one header group"
+        else:
+            detail = f"the groups cover {covered}, which is the columns out of order"
+        raise _err(
+            f"the header groups do not tile the table's columns: {detail}.",
+            layout_path=layout_path,
+            key_path=f"{key_path}.header_groups",
+            expected=f"spans covering every column exactly once, in order: {keys}.",
+            recover="adjust the spans so they cover each column once, left to right.",
+        )
+
+    span_key = block.get("row_span_key", "none")
+    if span_key not in ("none", None) and str(span_key) not in keys:
+        raise _err(
+            f"row_span_key is '{span_key}', which is not a column of this table.",
+            layout_path=layout_path,
+            key_path=f"{key_path}.row_span_key",
+            expected=f"'none', or one of this table's column keys {keys}.",
+            recover="set row_span_key: to a declared column key, or to none.",
+        )
 
 
 def _validate_field_providers(layout: dict, *, layout_id: str, layout_path: str) -> list[str]:
