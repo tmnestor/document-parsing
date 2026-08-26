@@ -370,6 +370,47 @@ disturbing this one.
 row is reported through row alignment instead. **Revisit if** column-swap
 failures across rows appear in practice.
 
+**L5 — a parser's own structured output is not consumed, only its Markdown.**
+Docling produces a `DoclingDocument`, whose `document.tables` can be exported
+to dataframes or CSV; other systems expose comparable object models. This
+design deliberately scores the Markdown instead, for three reasons.
+
+The interface settles the first: `scoring/predictions.py:140` reads one `.md`
+per page stem. A parser's object model never crosses that boundary — the runner
+has already exported to text by the time scoring begins — so consuming it would
+not be a scoring change but a change to what a prediction *is*, for every
+system.
+
+The second is fairness, and it is the decisive one. This corpus scores
+vision-language models alongside document parsers. A VLM has no object model to
+offer; it expresses structure through pipes and is penalised when it cannot. If
+a parser were scored from its native table objects while a VLM was scored from
+its Markdown, the two would not be answering the same question, and the
+comparison the benchmark exists to make would be void.
+
+The third is symmetry, the same argument as §3.1: the reference is Markdown, so
+a grid recovered from an object model on one side and from Markdown on the
+other could disagree because of the conversion rather than because of the model.
+
+**What this costs, stated plainly.** Where a parser holds a correct table
+internally and its Markdown exporter flattens it, this metric charges the
+exporter's failure to the parser. Today that cost is small — every table in the
+corpus is a uniform grid, so there is little for an exporter to flatten.
+`config/serialisation.yml:83` already records Docling emitting 124% of
+transcript length on receipts, so its export does diverge measurably; this
+metric will now report *where* rather than only how much.
+
+**Revisit when subsystem B lands.** Adding `colspan`/`rowspan` and spanning
+headers gives Markdown export something real to lose, and the cost above stops
+being small. The remedy then is not to change this metric but to make the
+runner's recording decision explicit — what text is stored as a parser's
+prediction — and to document it beside the run.
+
+A parser's structured output does have a legitimate use here that is not
+scoring: running Docling's `document.tables` beside `parse_tables()` on the same
+output is an independent check that this module recovers the grid the parser
+believed it wrote.
+
 ---
 
 ## 10. Success criteria
