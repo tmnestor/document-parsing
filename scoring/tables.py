@@ -101,6 +101,12 @@ def parse_tables(text: str) -> list[list[list[str]]]:
 def _cell_form(cell: str, policy: dict) -> str:
     """Return the text form cell equality uses, under the configured policy.
 
+    Under `normalised`, a cell of only dashes and/or colons (e.g. `-`, `--`,
+    `:`, `- -`) normalises to the empty string: `normalise()`'s separator-row
+    rule is anchored per line, and a lone cell is a whole "line" to it. So a
+    model that writes `-` into a blank reference cell scores that cell correct
+    under `normalised`. `strict` does not forgive this — it compares raw text.
+
     Args:
         cell: One cell's text.
         policy: The whole validated policy mapping.
@@ -189,6 +195,14 @@ def compare_row(ref_cells: list[str], pred_cells: list[str], policy: dict) -> tu
         value appears at some other position in the same prediction row, and is
         a diagnostic subset of the incorrect cells rather than a separate
         bucket.
+
+        When a reference row repeats the same non-empty value at two
+        positions (e.g. quantity 1 makes unit price equal amount), a wrong
+        cell can be flagged `misplaced` even though nothing actually moved —
+        the lookup finds the coincidental duplicate rather than a genuine
+        relocation. Reachable on real data (18 of 2074 corpus reference rows
+        repeat a value); affects only this diagnostic count, never
+        `table_cell_error_rate`.
     """
     width = len(ref_cells)
     reference = [_cell_form(cell, policy) for cell in ref_cells]
