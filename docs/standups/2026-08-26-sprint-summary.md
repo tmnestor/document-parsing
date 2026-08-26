@@ -6,6 +6,25 @@ Extraction to Document Parsing
 
 ---
 
+## 📍 Starting state (baseline, pre-sprint)
+
+Commit 1 (`5c59470`, 2026-08-25) already delivered a **complete whole-page
+transcription generator** — 61 files, ~20k lines, in one commit:
+
+- Synthetic Australian **invoices, receipts and bank statements** — 18 layouts,
+  55 cases each, **165 pristine page images**, each paired with a canonical
+  Markdown transcript
+- **YAML-driven**: layouts, field definitions, data pools and ground truth are
+  all config; the Python only draws
+- **Ground truth captured at draw time**, so labels cannot disagree with pixels
+- Deterministic: the same inputs render byte-identical images
+
+**Everything this sprint built sits on top of that and has not required
+changing it.** The generator has not moved a pixel in ~65 commits — the work
+below is about *measuring* what it produces, not producing it better.
+
+---
+
 ## ✅ Completed — Feature: Layout & Structure Ground Truth
 
 - Corpus now emits **OmniDocBench-format annotations**: `layout_dets` with
@@ -82,3 +101,7 @@ Extraction to Document Parsing
   transaction as a perfect transcription.**
 - The format proposal lands better as *adopting the field standard* than as a
   rewrite.
+- If anyone asks what changed in the generator: **nothing.** The corpus it
+  produces is byte-identical to the baseline. That is the evidence the original
+  design was right, and it is why the layout annotations could be added without
+  invalidating a single existing prediction.
