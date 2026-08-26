@@ -36,6 +36,19 @@ _invoice_field_budgets: &invoice_field_budgets
 # `_validate_text_budget` in generators/layout_dsl/schema.py). Everything else
 # (fit, min_font, max_lines) is unchanged, and LINE_ITEM_DESC is inherited:
 # the items table still spans the full page.
+# B2: the grouped-charges layout gives 420px to a leading category column, so
+# its description column is narrower than every other invoice's and needs its
+# own budget. Declared rather than inherited: the fit check is what stops a
+# description running under the Qty column, and it can only check a real number.
+_invoice_grouped_field_budgets: &invoice_grouped_field_budgets
+  <<: *invoice_field_budgets
+  LINE_ITEM_DESC: {width: 620, fit: shrink, min_font: 12, max_lines: 1}
+  SUPPLIER_NAME: {width: 820, fit: shrink_then_wrap, min_font: 12, max_lines: 2}
+  BUSINESS_ADDRESS: {width: 820, fit: shrink_then_wrap, min_font: 12, max_lines: 2}
+  ABN_LINE: {width: 820, fit: shrink, min_font: 12, max_lines: 1}
+  PAYER_NAME: {width: 820, fit: shrink_then_wrap, min_font: 12, max_lines: 2}
+  PAYER_ADDRESS: {width: 820, fit: shrink_then_wrap, min_font: 12, max_lines: 2}
+
 _invoice_split_field_budgets: &invoice_split_field_budgets
   <<: *invoice_field_budgets
   SUPPLIER_NAME: {width: 820, fit: shrink_then_wrap, min_font: 12, max_lines: 2}
@@ -210,6 +223,36 @@ _invoice_line_items: &invoice_line_items
        label_x: 1050, label_align: left, field: LINE_ITEM_PRICES}
     - {key: total, label: "Total", align: right, x: 1750,
        label_x: 1550, label_align: left, field: LINE_ITEM_TOTAL_PRICES}
+# B2: the same line-items table with a leading category column, merged down the
+# consecutive items it covers. `row_span_key` names that column; the primitive
+# finds the runs. The other columns shift right to make room, and the category
+# heading sits above its own column rather than spanning — a merged label is a
+# body construct, not a header one.
+_invoice_grouped_line_items: &invoice_grouped_line_items
+  type: table
+  rows: pipe_fields
+  frame: filled
+  fill_color: "#F0F0F0"
+  grouping: none
+  row_span_key: category
+  row_height: 52
+  header_height: 52
+  label_inset_y: 12
+  row_inset_y: 12
+  params:
+    fields: {category: LINE_ITEM_CATEGORIES, description: LINE_ITEM_DESCRIPTIONS,
+             quantity: LINE_ITEM_QUANTITIES, price: LINE_ITEM_PRICES,
+             total: LINE_ITEM_TOTAL_PRICES}
+    decimal_keys: [price, total]
+  columns:
+    - {key: category, label: "Category", align: left, x: 0, field: LINE_ITEM_CATEGORIES}
+    - {key: description, label: "Description", align: left, x: 420,
+       budget: LINE_ITEM_DESC, field: LINE_ITEM_DESCRIPTIONS}
+    - {key: quantity, label: "Qty", align: left, x: 1080, field: LINE_ITEM_QUANTITIES}
+    - {key: price, label: "Unit Price", align: right, x: 1400,
+       label_x: 1200, label_align: left, field: LINE_ITEM_PRICES}
+    - {key: total, label: "Total", align: right, x: 1750,
+       label_x: 1600, label_align: left, field: LINE_ITEM_TOTAL_PRICES}
 # Deliberately bare: a plain spacer means "this layout's standard gap", which
 # is `defaults.spacer_height` (20px, legacy's gap after each line-item table).
 # Pinning the 20 inline would put a second copy of that number in the file and
@@ -395,6 +438,27 @@ layouts:
       - *invoice_date
       - *invoice_rule
       - *invoice_line_items
+      - *invoice_table_gap
+      - *invoice_rule
+      - *invoice_totals_separate
+      - *invoice_payment_terms
+
+  # B2: merged category labels down the line items. Otherwise the plain
+  # parties-ruled page, so the merged cell is the only thing that differs.
+  tax_invoice_grouped_charges:
+    <<: *invoice_page
+    field_budgets: *invoice_grouped_field_budgets
+    field_providers: *invoice_field_providers
+    defaults:
+      <<: *invoice_defaults_values
+    body:
+      - *invoice_title
+      - *invoice_rule
+      - *invoice_parties_ruled
+      - *invoice_buyer_gap
+      - *invoice_date
+      - *invoice_rule
+      - *invoice_grouped_line_items
       - *invoice_table_gap
       - *invoice_rule
       - *invoice_totals_separate

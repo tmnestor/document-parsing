@@ -14,6 +14,12 @@
 # Only the layouts named here carry these; the other 48 bank statements do not
 # and must not.
 layout_fields:
+  # The merged category label (B2): one category per line item, merged down the
+  # consecutive items it covers. Only this layout draws it, so only its entries
+  # carry it — the same rule the rewards fields follow.
+  tax_invoice_grouped_charges:
+    - LINE_ITEM_CATEGORIES
+
   westpac_premium:
     - REWARDS_OPENING_BALANCE
     - REWARDS_POINTS_EARNED

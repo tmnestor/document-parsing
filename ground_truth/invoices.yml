@@ -1176,3 +1176,111 @@ CASE067:
     PAYER_NAME: Callum Pretorius
     SUPPLIER_NAME: Bramwell Legal Group
     TOTAL_AMOUNT: '92.95'
+CASE068:
+  layout: tax_invoice_grouped_charges
+  fields:
+    BUSINESS_ABN: '94 829 936 086'
+    BUSINESS_ADDRESS: 238 Ellerslie Dr, Nundah QLD 4012
+    DOCUMENT_TYPE: INVOICE
+    GST_AMOUNT: '330.62'
+    INVOICE_DATE: 21/09/2024
+    IS_GST_INCLUDED: true
+    LINE_ITEM_CATEGORIES: Materials|Materials|Disposal|Disposal|Disposal
+    LINE_ITEM_DESCRIPTIONS: Trim and beading|Sealant and adhesive|Waste removal|Recycling levy|Skip hire
+    LINE_ITEM_PRICES: 311.68|459.69|482.85|83.12|75.52
+    LINE_ITEM_QUANTITIES: '1|5|1|2|5'
+    LINE_ITEM_TOTAL_PRICES: 311.68|2298.45|482.85|166.24|377.60
+    PAYER_ADDRESS: 24 Ellerslie Dr, Prospect SA 5082
+    PAYER_NAME: Clarissa Prendergast
+    SUPPLIER_NAME: Thackeray Electrical
+    TOTAL_AMOUNT: '3636.82'
+CASE069:
+  layout: tax_invoice_grouped_charges
+  fields:
+    BUSINESS_ABN: '96 068 423 203'
+    BUSINESS_ADDRESS: 238 Sandiford Ave, Ainslie ACT 2602
+    DOCUMENT_TYPE: INVOICE
+    GST_AMOUNT: '1070.04'
+    INVOICE_DATE: 07/10/2024
+    IS_GST_INCLUDED: true
+    LINE_ITEM_CATEGORIES: Materials|Materials|Materials|Disposal|Disposal|Disposal|Labour|Labour
+    LINE_ITEM_DESCRIPTIONS: Conduit and fittings|Sealant and adhesive|Sheet material|Skip hire|Waste removal|Recycling levy|Supervision hours|Second fix labour
+    LINE_ITEM_PRICES: 536.00|513.15|80.87|342.11|140.60|200.51|215.59|557.56
+    LINE_ITEM_QUANTITIES: '2|6|5|4|4|6|6|5'
+    LINE_ITEM_TOTAL_PRICES: 1072.00|3078.90|404.35|1368.44|562.40|1203.06|1293.54|2787.80
+    PAYER_ADDRESS: 357 Marchmont Pde, Nundah QLD 4012
+    PAYER_NAME: Tobias Ravenscroft
+    SUPPLIER_NAME: Sedgemoor Tiling
+    TOTAL_AMOUNT: '11770.49'
+CASE070:
+  layout: tax_invoice_grouped_charges
+  fields:
+    BUSINESS_ABN: '44 090 736 886'
+    BUSINESS_ADDRESS: 381 Ellerslie Dr, Lindisfarne TAS 7015
+    DOCUMENT_TYPE: INVOICE
+    GST_AMOUNT: '857.74'
+    INVOICE_DATE: 25/04/2024
+    IS_GST_INCLUDED: true
+    LINE_ITEM_CATEGORIES: Disposal|Disposal|Disposal|Equipment|Equipment|Labour|Labour
+    LINE_ITEM_DESCRIPTIONS: Recycling levy|Waste removal|Skip hire|Scaffold hire|Dust extraction hire|Second fix labour|Commissioning visit
+    LINE_ITEM_PRICES: 356.10|550.40|411.26|230.10|547.97|143.53|221.18
+    LINE_ITEM_QUANTITIES: '5|3|5|6|2|1|6'
+    LINE_ITEM_TOTAL_PRICES: 1780.50|1651.20|2056.30|1380.60|1095.94|143.53|1327.08
+    PAYER_ADDRESS: 382 Ellerslie Dr, Lindisfarne TAS 7015
+    PAYER_NAME: Fitzwilliam Bellingham
+    SUPPLIER_NAME: Kirkbride Joinery
+    TOTAL_AMOUNT: '9435.15'
+CASE071:
+  layout: tax_invoice_grouped_charges
+  fields:
+    BUSINESS_ABN: '23 046 420 526'
+    BUSINESS_ADDRESS: 383 Verity Cres, Lindisfarne TAS 7015
+    DOCUMENT_TYPE: INVOICE
+    GST_AMOUNT: '787.96'
+    INVOICE_DATE: 12/06/2024
+    IS_GST_INCLUDED: true
+    LINE_ITEM_CATEGORIES: Labour|Labour|Materials|Materials
+    LINE_ITEM_DESCRIPTIONS: Site attendance|Commissioning visit|Sealant and adhesive|Conduit and fittings
+    LINE_ITEM_PRICES: 371.37|198.52|347.36|527.34
+    LINE_ITEM_QUANTITIES: '6|6|6|6'
+    LINE_ITEM_TOTAL_PRICES: 2228.22|1191.12|2084.16|3164.04
+    PAYER_ADDRESS: 451 Halloran Way, Nundah QLD 4012
+    PAYER_NAME: Barnaby Marchbanks
+    SUPPLIER_NAME: Ravensworth Plumbing
+    TOTAL_AMOUNT: '8667.54'
+CASE072:
+  layout: tax_invoice_grouped_charges
+  fields:
+    BUSINESS_ABN: '21 992 519 763'
+    BUSINESS_ADDRESS: 318 Marchmont Pde, Wembley WA 6014
+    DOCUMENT_TYPE: INVOICE
+    GST_AMOUNT: '862.99'
+    INVOICE_DATE: 25/02/2023
+    IS_GST_INCLUDED: true
+    LINE_ITEM_CATEGORIES: Equipment|Equipment|Equipment|Labour|Labour|Labour
+    LINE_ITEM_DESCRIPTIONS: Scaffold hire|Generator hire|Compressor hire|Make good and clean|Site attendance|Second fix labour
+    LINE_ITEM_PRICES: 190.64|635.04|442.23|75.17|440.31|437.55
+    LINE_ITEM_QUANTITIES: '6|6|1|2|3|6'
+    LINE_ITEM_TOTAL_PRICES: 1143.84|3810.24|442.23|150.34|1320.93|2625.30
+    PAYER_ADDRESS: 268 Kingsmill St, Nundah QLD 4012
+    PAYER_NAME: Ambrose Hollingsworth
+    SUPPLIER_NAME: Thackeray Electrical
+    TOTAL_AMOUNT: '9492.88'
+CASE073:
+  layout: tax_invoice_grouped_charges
+  fields:
+    BUSINESS_ABN: '59 807 637 676'
+    BUSINESS_ADDRESS: 478 Ferrers St, Nundah QLD 4012
+    DOCUMENT_TYPE: INVOICE
+    GST_AMOUNT: '662.72'
+    INVOICE_DATE: 18/08/2024
+    IS_GST_INCLUDED: true
+    LINE_ITEM_CATEGORIES: Materials|Materials|Equipment|Equipment|Labour|Labour
+    LINE_ITEM_DESCRIPTIONS: Trim and beading|Fixings and brackets|Compressor hire|Access platform hire|Second fix labour|Commissioning visit
+    LINE_ITEM_PRICES: 378.10|457.31|237.51|595.48|204.04|168.76
+    LINE_ITEM_QUANTITIES: '2|4|5|3|6|3'
+    LINE_ITEM_TOTAL_PRICES: 756.20|1829.24|1187.55|1786.44|1224.24|506.28
+    PAYER_ADDRESS: 49 Sandiford Ave, Lindisfarne TAS 7015
+    PAYER_NAME: Lysander Bellingham
+    SUPPLIER_NAME: Amberley Roofing
+    TOTAL_AMOUNT: '7289.95'

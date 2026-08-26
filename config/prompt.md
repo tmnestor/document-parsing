@@ -98,6 +98,36 @@ Do not promote the first line of data into the heading, and do not invent column
 names such as "Item" or "Price". Do not write these lines as ordinary
 paragraphs — the way they line up down the page is what makes them a table.
 
+**Where a heading sits above several columns, write it as one cell spanning
+them.** Some tables label their columns in two tiers: a heading across a group
+of columns, and the individual column names beneath it. Write the upper tier as
+its own row of `<th>` cells, giving the spanning one a `colspan`. A column that
+sits under no grouping gets an empty `<th>` in that row, so the tier still has
+one entry per column group:
+
+```html
+<table><thead><tr><th></th><th colspan="2">Charges</th></tr>
+<tr><th>Description</th><th>Units</th><th>Amount</th></tr></thead>
+<tbody><tr><td>Ferrous Bracket 8mm</td><td>2</td><td>$26.75</td></tr></tbody></table>
+```
+
+Do not repeat the spanning heading over each column it covers, and do not drop
+it.
+
+**Where one cell is merged down several rows, write it once with a `rowspan`.**
+A label covering a run of rows beneath it is printed once on the page. Give that
+cell a `rowspan` counting the rows it covers, and write **no cell at all** for
+that column on the rows below — they are one cell short by design:
+
+```html
+<table><tbody><tr><td rowspan="2">Fabrication</td><td>Ferrous Bracket 8mm</td><td>$26.75</td></tr>
+<tr><td>Crimp Sleeve 4mm</td><td>$31.05</td></tr>
+<tr><td>Handling</td><td>Assembly and packing</td><td>$18.90</td></tr></tbody></table>
+```
+
+Do not repeat the label on every row it covers, and do not leave an empty cell
+in its place.
+
 **Where a date heads a group of rows, repeat it on every row of that group.**
 A statement prints a date once and then lists that day's entries beneath it with
 the date column left blank. It does this in two ways, and both are the same

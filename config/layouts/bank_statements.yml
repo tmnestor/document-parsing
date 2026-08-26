@@ -450,6 +450,66 @@ layouts:
       - {type: text, role: footer, color: "#666666",
          content: "Transaction types: EFTPOS, ATM, Direct Debit, Direct Credit, Transfer"}
 
+  # B2: cba_standard with a spanning header tier. A real statement groups the
+  # three money columns under one heading rather than labelling each in
+  # isolation, and the tier is the construct a pipe table could not express at
+  # all. Everything below the header is cba_standard's, so the tier is the only
+  # thing that differs.
+  cba_grouped_columns:
+    <<: *cba
+    font_sizes:
+      header: 48
+      body: 32
+      footer: 18
+    row_height: 72
+    defaults:
+      <<: *dsl_defaults_values
+      family: carlito
+      line_advance: {header: 67, body: 44, footer: 25}
+    transaction_count: {min: 23, max: 27}
+    field_providers: []
+    body:
+      - {type: text, from_layout: logo_text, role: header, color: "#12107D",
+         title: true}
+      - {type: text, role: footer, color: "#666666",
+         content: "Commonwealth Bank of Australia"}
+      - {type: text, role: footer, color: "#666666", budget: LEGAL_FOOTNOTE,
+         content: "ABN 48 123 456 789 AFSL and Australian credit licence 234567"}
+      - {type: spacer, height: 40}
+      - {type: pair, label: "Account Holder", value: "{PAYER_NAME}", role: body,
+         field: PAYER_NAME}
+      - {type: pair, label: "Statement Period", value: "{STATEMENT_DATE_RANGE}", role: body,
+         when: STATEMENT_DATE_RANGE, field: STATEMENT_DATE_RANGE}
+      - {type: text, content: "{SUPPLIER_NAME}", role: body, color: gray,
+         field: SUPPLIER_NAME, suppress_if_equals: logo_text}
+      - {type: spacer, height: 28}
+      - type: table
+        rows: bank_transactions
+        frame: ruled
+        grouping: none
+        params: {opening_balance: true, opening_balance_label: "Opening Balance"}
+        # The tier must tile every column exactly once, in order. The date and
+        # description columns sit under no grouping and carry an empty label,
+        # which draws nothing but keeps the tier rectangular — inventing a
+        # heading the page does not show would be worse than leaving it blank.
+        header_groups:
+          - {label: "", span: [date]}
+          - {label: "", span: [description]}
+          - {label: "Amount", span: [debit, credit, balance]}
+        columns:
+          - {key: date, label: Date, align: left, x: 0}
+          - {key: description, label: Description, align: left, x: 200,
+             budget: TRANSACTION_DESC, field: TRANSACTION_DESCRIPTIONS}
+          - {key: debit, label: Withdrawal, align: right, x_right: -420,
+             field: TRANSACTION_AMOUNTS_PAID}
+          - {key: credit, label: Deposit, align: right, x_right: -210,
+             field: TRANSACTION_AMOUNTS_RECEIVED}
+          - {key: balance, label: Balance, align: right, x_right: 0,
+             last_row_field: ACCOUNT_BALANCE}
+      - {type: spacer, height: 40}
+      - {type: text, role: footer, color: "#666666",
+         content: "Transaction types: EFTPOS, ATM, Direct Debit, Direct Credit, Transfer"}
+
   cba_date_grouped:
     <<: *cba
     font_sizes:
