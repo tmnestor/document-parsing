@@ -186,6 +186,116 @@ def pad_row(cells: list[str], width: int, blank: str) -> list[str]:
     return list(cells) + [blank] * (width - len(cells))
 
 
+class TableBuilder:
+    """Accumulates one page's table events and renders each table at its close.
+
+    The single implementation of the table walk. `serialise.serialise` and
+    `table_html` both drive it with the same events in the same order, so the
+    transcript's table and the exported `tables/{stem}.html` are the same bytes
+    by construction — not by two walks being kept in step by hand, which is what
+    this class replaces.
+    """
+
+    #: Event kinds this builder consumes. A caller checks membership to decide
+    #: whether to delegate, so the set is part of the interface.
+    KINDS: frozenset[str] = frozenset(
+        {"table_open", "row_open", "cell", "cell_sub_line", "row_close", "table_close"}
+    )
+
+    def __init__(self, policy: dict) -> None:
+        """Args:
+        policy: The validated serialisation policy.
+        """
+        self._policy = policy
+        self._rows: list[tuple[list[str], bool]] = []
+        self._row: list[str] = []
+        self._keys: list[str] = []
+        self._is_header = False
+        self._columns: list[str] = []
+        self._open_seq: int | None = None
+        self._open_row_seq: int | None = None
+
+    def feed(self, event: dict) -> str | None:
+        """Consume one event.
+
+        Args:
+            event: One event dict from the captured stream.
+
+        Returns:
+            The table's HTML when `event` is a `table_close`, else None.
+
+        Raises:
+            TableHtmlError: The stream is unbalanced, or a row carries more
+                cells than the table declares columns.
+        """
+        kind = event["kind"]
+        meta = event.get("meta") or {}
+        if kind == "table_open":
+            self._rows, self._open_seq = [], int(event["seq"])
+            self._columns = list(meta.get("columns") or [])
+        elif kind == "row_open":
+            self._row, self._keys, self._is_header = [], [], False
+            self._open_row_seq = int(event["seq"])
+        elif kind == "cell":
+            self._row.append(
+                _join_cell(str(event["text"] or self._policy["empty_cell_token"]), self._policy)
+            )
+            self._keys.append(str(meta.get("column_key", "")))
+            self._is_header = self._is_header or bool(meta.get("header"))
+        elif kind == "cell_sub_line":
+            self._fold_sub_line(event, meta)
+        elif kind == "row_close":
+            if self._open_row_seq is None:
+                raise _err("a row_close has no matching row_open.", seq=int(event["seq"]))
+            self._rows.append((self._row, self._is_header))
+            self._row, self._keys, self._is_header = [], [], False
+            self._open_row_seq = None
+        elif kind == "table_close":
+            if self._open_row_seq is not None:
+                raise _err("a row_open has no matching row_close.", seq=self._open_row_seq)
+            html = _render(self._rows, self._columns, self._policy)
+            self._rows, self._open_seq, self._columns = [], None, []
+            return html
+        return None
+
+    def finish(self) -> None:
+        """Assert the stream ended balanced.
+
+        Raises:
+            TableHtmlError: A `table_open` or `row_open` was never closed.
+        """
+        if self._open_seq is not None:
+            raise _err("a table_open has no matching table_close.", seq=self._open_seq)
+        if self._open_row_seq is not None:
+            raise _err("a row_open has no matching row_close.", seq=self._open_row_seq)
+
+    def _fold_sub_line(self, event: dict, meta: dict) -> None:
+        """Fold a sub-line into the cell it belongs to, found by column key.
+
+        Stripped before the fold, not after: the decoration run is trailing on
+        the sub-line, and folding first would bury it mid-cell where the pattern
+        no longer matches.
+        """
+        key = str(meta.get("column_key", ""))
+        content = strip_decoration_run(
+            str(event["text"] or ""),
+            glyphs=self._policy["decoration_glyphs"],
+            min_run=self._policy["decoration_min_run"],
+        )
+        join = self._policy["cell_sub_line_join"]
+        if key in self._keys:
+            position = self._keys.index(key)
+            self._row[position] = f"{self._row[position]}{join}{content}"
+        elif self._rows and key in self._columns:
+            # Defensive only: `_draw_sub_lines` (primitives_table.py:870) always
+            # emits cell_sub_line before that row's row_close, so this branch is
+            # unreachable on the real corpus today.
+            position = self._columns.index(key)
+            cells, _header = self._rows[-1]
+            if position < len(cells):
+                cells[position] = f"{cells[position]}{join}{content}"
+
+
 def table_html(events: list[dict], policy: dict) -> list[str]:
     """Render every table in an event stream as an HTML table.
 
@@ -197,73 +307,16 @@ def table_html(events: list[dict], policy: dict) -> list[str]:
 
     Returns:
         One HTML string per table, in walk order. Empty when the page has none.
+        Rendered by the same `TableBuilder` the transcript uses, so the two
+        projections cannot disagree.
 
     Raises:
         TableHtmlError: A table is not closed, a row is not closed, or a row
             carries more cells than the table declares columns.
     """
-    tables: list[str] = []
-    rows: list[tuple[list[str], bool]] = []
-    row: list[str] = []
-    keys: list[str] = []
-    is_header = False
-    open_seq: int | None = None
-    open_row_seq: int | None = None
-    table_columns: list[str] = []
-
-    for event in events:
-        kind = event["kind"]
-        meta = event.get("meta") or {}
-        if kind == "table_open":
-            rows, open_seq = [], int(event["seq"])
-            table_columns = list(meta.get("columns") or [])
-        elif kind == "row_open":
-            row, keys, is_header = [], [], False
-            open_row_seq = int(event["seq"])
-        elif kind == "cell":
-            row.append(_join_cell(str(event["text"] or policy["empty_cell_token"]), policy))
-            keys.append(str(meta.get("column_key", "")))
-            is_header = is_header or bool(meta.get("header"))
-        elif kind == "cell_sub_line":
-            # Mirrors serialise.py's cell_sub_line handling exactly (stripped
-            # before the fold, joined with the policy's join string, not a
-            # hardcoded " "): a dot-leader continuation cell — NAB's reference
-            # padded to 40 dots — must state one ground truth in both
-            # projections, not ship the raw leader in HTML while Markdown
-            # strips it.
-            key = str(meta.get("column_key", ""))
-            content = strip_decoration_run(
-                str(event["text"] or ""),
-                glyphs=policy["decoration_glyphs"],
-                min_run=policy["decoration_min_run"],
-            )
-            if key in keys:
-                position = keys.index(key)
-                row[position] = f"{row[position]}{policy['cell_sub_line_join']}{content}"
-            elif rows and key in table_columns:
-                # Defensive only: `_draw_sub_lines` (primitives_table.py:870)
-                # always emits cell_sub_line before that row's row_close, so
-                # this branch is unreachable on the real corpus today.
-                position = table_columns.index(key)
-                cells, header = rows[-1]
-                if position < len(cells):
-                    cells[position] = f"{cells[position]}{policy['cell_sub_line_join']}{content}"
-        elif kind == "row_close":
-            if open_row_seq is None:
-                raise _err("a row_close has no matching row_open.", seq=int(event["seq"]))
-            rows.append((row, is_header))
-            row, keys, is_header = [], [], False
-            open_row_seq = None
-        elif kind == "table_close":
-            if open_row_seq is not None:
-                raise _err("a row_open has no matching row_close.", seq=open_row_seq)
-            tables.append(_render(rows, table_columns, policy))
-            rows, open_seq, table_columns = [], None, []
-
-    if open_seq is not None:
-        raise _err("a table_open has no matching table_close.", seq=open_seq)
-    if open_row_seq is not None:
-        raise _err("a row_open has no matching row_close.", seq=open_row_seq)
+    builder = TableBuilder(policy)
+    tables = [html for event in events if (html := builder.feed(event)) is not None]
+    builder.finish()
     return tables
 
 
