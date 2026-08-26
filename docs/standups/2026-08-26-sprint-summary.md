@@ -79,38 +79,56 @@ The generator was producing ground truth that nothing could use:
 - Recorded why we score the transcript rather than a parser's native object
   model (e.g. Docling's `DoclingDocument`)
 
-## 🔄 In Progress — Feature: Structural Realism (B1)
+## ✅ Completed — Feature: Structural Realism (B1)
 
-- Adding **side-by-side vendor/payer invoice blocks** — the layout convention
+- Added **side-by-side vendor/payer invoice blocks** — the layout convention
   competent models most often get wrong
-- Notable: our prompt already instructs the reading rule and the renderer
-  already implements it, **but no page in the corpus exercised it**
-- Additive only — the existing 165 pages stay byte-identical
-- Spec and plan approved, implementation underway
+- Notable: our prompt already instructed the reading rule and the renderer
+  already implemented it, **but no page in the corpus exercised it**
+- Additive only — the existing 165 pages stayed byte-identical. Corpus is now
+  **177 pages** (67 invoices, 55 receipts, 55 bank statements)
+
+## ✅ Completed — Feature: Markdown with HTML Tables
+
+- Transcripts now carry tables as HTML `<table>` rather than Markdown pipe
+  tables. Pipe tables cannot express merged cells, which blocked B2 entirely
+- Matches OmniDocBench, MinerU and Docling — a field standard, not an invention
+- **No image moved.** All 177 images byte-identical; only transcripts changed,
+  re-emitted in seconds with no re-rendering
+- Folded in a de-duplication that had become unsafe: `serialise` and `tables`
+  each walked the same table events, kept in agreement by a comment. They now
+  share one `TableBuilder`, so a transcript's table and the exported
+  `tables/{stem}.html` are the same bytes **by construction**. Verified across
+  all 191 tables on 177 pages
+- Two hazards found and closed while scoping:
+  - The manifest hashed only the image, so a re-serialised corpus was
+    indistinguishable from the previous vintage by the very guard meant to
+    prevent wrong-vintage scoring. Manifest rows now carry `transcript_sha256`
+  - The prompt leak guard parsed pipe syntax, so against HTML examples it
+    passed vacuously on a real leak — demonstrated by planting
+    'Potting Mix 25L' and watching it go green. It now reads `<td>`/`<th>`,
+    which is stricter than the positional heuristic it replaced
+- **B2 is now unblocked**
 
 ## 📋 Proposed — Next Sprint
 
-- **Change transcription target to Markdown with HTML tables** (currently
-  Markdown only)
-  - Driver: Markdown pipe tables **cannot express merged cells**, blocking
-    spanning-header support
-  - Matches OmniDocBench, MinerU and Docling conventions — adopting a standard,
-    not inventing one
-  - We already generate the HTML; transcripts re-emit in seconds with **no
-    image re-rendering**
-  - Cost: ~1.46x tokens on table content; scoring parser and prompt need
-    updating
-- **Then B2:** colspan / rowspan / spanning headers — trivial once tables are
-  HTML
-- **Sequencing agreed:** B1 → format change → B2
+- **B2: colspan / rowspan / spanning headers.** Unblocked by the format change,
+  and there is now exactly one place to add them — `TableBuilder` in
+  `generators/tables.py`
+- **Scoring repository:** its table parser needs updating for HTML. The
+  interface is the exported corpus, not shared code, so this is separate work
+- **Sequencing:** B1 → format change → B2. First two done
 
 ## ⚠️ Risks / Notes
 
 - **Corpus saturation:** receipts and invoices cannot currently separate
   models — only bank statements discriminate. Better metrics will not fix this;
   harder documents will
-- The format change will invalidate predictions scored against current
-  transcripts (images unaffected)
+- The format change **has invalidated** predictions scored against pipe-table
+  transcripts. Images are unaffected, so re-scoring needs no new inference —
+  only re-running the scorer against the new transcripts
+- Table content costs ~1.46x tokens as HTML; worth restating when reporting any
+  length-sensitive metric across the boundary
 
 ---
 
