@@ -23,6 +23,25 @@ transcription generator** — 61 files, ~20k lines, in one commit:
 changing it.** The generator has not moved a pixel in ~65 commits — the work
 below is about *measuring* what it produces, not producing it better.
 
+### Why extend it
+
+The generator was producing ground truth that nothing could use:
+
+- **The labels were already there and being thrown away.** The renderer knows
+  every element's box, category and draw order at the moment it draws — it
+  computed those and discarded them. Emitting them costs no new annotation
+  effort and gives us **authored** rather than hand-labelled ground truth for
+  layout, reading order and table structure, which no public benchmark has
+- **We could only score text, and the text score was misleading.** A sign error
+  on every transaction of a bank statement scored as a perfect transcription.
+  We could not have detected it, and neither could anyone using the corpus
+- **Our documents are table-dominated** — a bank statement is essentially one
+  long table, and 73% of the corpus by character count sits inside tables — so
+  the one thing we could not measure was the one thing that matters most
+- **The ask was to extend the Information Extraction dataset work to Document
+  Parsing.** Document parsing is scored on layout, reading order, tables and
+  text; we shipped only the last of those, and shipped it blind to placement
+
 ---
 
 ## ✅ Completed — Feature: Layout & Structure Ground Truth
