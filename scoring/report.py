@@ -25,7 +25,7 @@ from scoring.policy import load_scoring_policy
 
 app = typer.Typer(add_completion=False, help="Aggregate scored rows into a comparison.")
 
-_METRICS = ("normalised_cer", "strict_cer", "normalised_wer")
+_METRICS = ("normalised_cer", "strict_cer", "normalised_wer", "table_cell_error_rate")
 _GROUP_KEYS = ("model", "corpus", "doc_type", "family", "severity")
 
 

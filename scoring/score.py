@@ -20,6 +20,7 @@ from scoring.metrics import character_error_rate, edit_distance, is_degenerate, 
 from scoring.normalise import normalise
 from scoring.policy import load_scoring_policy
 from scoring.predictions import PredictionSet, load_predictions
+from scoring.tables import score_tables
 
 app = typer.Typer(add_completion=False, help="Score model predictions against an exported corpus.")
 
@@ -76,6 +77,14 @@ def score_page(reference: str, prediction: str | None, policy: dict, *, verified
             "normalised_cer": None,
             "normalised_wer": None,
             "degenerate": False,
+            "table_cell_error_rate": None,
+            "table_cells_compared": None,
+            "table_cells_correct": None,
+            "table_cells_misplaced": None,
+            "table_rows_missing": None,
+            "table_rows_spurious": None,
+            "table_count_ref": None,
+            "table_count_pred": None,
         }
 
     rules = policy["normalisation"]
@@ -94,6 +103,7 @@ def score_page(reference: str, prediction: str | None, policy: dict, *, verified
         "degenerate": is_degenerate(
             reference, prediction, float(policy["reporting"]["degenerate_length_multiple"])
         ),
+        **score_tables(reference, prediction, policy),
     }
 
 
