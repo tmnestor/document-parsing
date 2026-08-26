@@ -109,9 +109,12 @@ non-compliant, and stripping it would hide that.
 ### 3.3 Pairing tables within a page
 
 Reference and prediction tables are paired by position in document order:
-reference table *k* to prediction table *k*. Unpaired reference tables
-contribute their rows to `table_rows_missing`; unpaired prediction tables
-contribute theirs to `table_rows_spurious`.
+reference table *k* to prediction table *k*. An unpaired reference table
+contributes its rows to `table_rows_missing` and its cells to the denominator
+as incorrect, exactly as a dropped row does — a model that omits a whole table
+must not score better than one that omits its rows one at a time. An unpaired
+prediction table contributes its rows to `table_rows_spurious` and nothing
+else.
 
 Positional pairing matches the convention already used for multi-table pages
 elsewhere in this project (`tables/*.html` holds a page's tables in page
@@ -139,17 +142,26 @@ Opcodes map to outcomes:
 | `delete` | reference rows with no counterpart → `table_rows_missing` |
 | `insert` | prediction rows with no counterpart → `table_rows_spurious` |
 
-**Cells in unmatched rows are not compared.** A dropped row is reported as one
-missing row, not as a row of wrong cells. This is what makes the metric answer
-"was what you transcribed placed correctly?" rather than conflating placement
-with completeness.
+**Alignment decides pairing, not the denominator.** These are two independent
+choices and conflating them is a trap. Alignment exists so that one dropped row
+costs one row rather than cascading into every row after it. The denominator is
+a separate question, answered in §3.5: **every reference cell counts**,
+including the cells of rows the prediction dropped, which count as incorrect.
 
-**The consequence must be stated, because it is a gaming path.** A model that
-drops its hardest rows improves its cell error rate. `table_rows_missing` is
-reported alongside precisely so neither number is read alone — the same
-framing `config/scoring.yml` already applies to NORMALISED and STRICT, where
-"two numbers are reported and neither is the real one on its own." Dropped
-content is separately visible in NORMALISED CER, which does see it.
+The alternative — counting only matched cells — was rejected. It makes the
+metric read "of what you transcribed, how much landed correctly?", under which
+a model that transcribes 3 rows of a 27-row statement and drops the other 24
+scores a **perfect** cell error rate. `table_rows_missing` would sit beside it
+saying 24, but the headline number would be actively misleading rather than
+merely partial. That is unlike the existing NORMALISED/STRICT pair, where each
+number is individually honest about a different question.
+
+The two denominators are **identical whenever the prediction drops no rows**.
+They diverge only in the case the matched-only form is blind to, so counting
+every reference cell costs nothing on well-behaved output and closes the hole.
+A dropped row still costs exactly its own cells — five on a five-column
+statement — not every row after it, so the anti-cascade property alignment was
+chosen for is fully preserved.
 
 ### 3.5 Comparing cells
 
@@ -157,9 +169,16 @@ Within a matched row pair, both rows are padded with empty cells to the
 reference row's width. Each position is compared after `normalise()` under the
 configured form.
 
-- `table_cells_compared` counts every reference cell in a matched row,
-  **including cells the reference leaves empty**.
-- `table_cells_correct` counts positions that compare equal.
+- `table_cells_compared` counts **every reference cell on the page** —
+  those in matched rows, those in rows the prediction dropped, and those in
+  reference tables the prediction produced no counterpart for — and it counts
+  cells the reference leaves empty.
+- `table_cells_correct` counts positions in matched rows that compare equal. A
+  cell in a dropped row can never be correct.
+
+Spurious rows the model invents contribute to `table_rows_spurious` and to
+nothing else. There is no reference cell to compare them against, and adding
+them to a reference-cell denominator would be incoherent.
 
 Counting empty reference cells is the crux of the whole design. In the probe,
 a debit row carries an empty Credits cell; the misfile empties Debits and
@@ -187,9 +206,9 @@ is a structural failure that row alignment already reports.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `table_cell_error_rate` | float \| None | `(compared - correct) / compared`; `None` when no cells were compared |
-| `table_cells_compared` | int | reference cells in matched rows |
-| `table_cells_correct` | int | of those, positions that matched |
+| `table_cell_error_rate` | float \| None | `(compared - correct) / compared`; `None` when the reference has no table cells |
+| `table_cells_compared` | int | every reference cell on the page, dropped rows included |
+| `table_cells_correct` | int | positions in matched rows that compared equal |
 | `table_cells_misplaced` | int | incorrect cells whose value sits elsewhere in the same row |
 | `table_rows_missing` | int | reference rows with no prediction counterpart |
 | `table_rows_spurious` | int | prediction rows with no reference counterpart |
@@ -309,8 +328,12 @@ is the dominant failure mode of this codebase, recorded five times in
 `docs/superpowers/2026-08-26-layout-ground-truth-follow-ups.md` §4. Every
 stage of this work is verified against real corpus output.
 
-Further cases: a dropped row reports one missing row and does not cascade; a
-spurious row is counted and does not corrupt alignment; a misplaced value is
+Further cases: a dropped row reports one missing row, costs exactly its own
+cells and does not cascade into the rows after it — the case that separates
+this design from both rejected alternatives, and worth asserting on the
+numbers, not merely on the row counts; a table dropped whole costs the same as
+its rows dropped one at a time; a spurious row is counted and does not corrupt
+alignment; a misplaced value is
 counted both incorrect and misplaced; an empty reference cell filled by the
 model is counted incorrect; a page with two tables pairs them in order; a
 prediction with no tables loses every row; `cell_comparison: strict` changes
@@ -334,10 +357,14 @@ contains a separator row.
 `\|`, so no reference contains one. A prediction containing one splits into an
 extra cell. **Revisit if** any field value ever legitimately contains a pipe.
 
-**L3 — dropped rows are excluded from the cell error rate** (§3.4). Mitigated
-by reporting `table_rows_missing` alongside, and by NORMALISED CER seeing
-dropped content. **Revisit if** a model is observed dropping rows selectively
-enough to profit from it.
+**L3 — the error rate mixes placement failure with omission.** Counting dropped
+rows' cells as incorrect (§3.4) is what removes the gaming path, but it means a
+single number no longer separates "filed in the wrong column" from "never
+transcribed". `table_cells_misplaced` and `table_rows_missing` are reported
+alongside precisely to separate them, and the two causes are distinguishable
+from those counts. **Revisit if** a consumer needs placement isolated as its
+own rate; the matched-cell denominator can be added as a second field without
+disturbing this one.
 
 **L4 — misplacement is detected within a row only.** A value moved to another
 row is reported through row alignment instead. **Revisit if** column-swap
@@ -354,9 +381,12 @@ failures across rows appear in practice.
    `table_cell_error_rate` of exactly 0.0 with no missing or spurious rows.
 3. `table_cells_misplaced` distinguishes a misfiled value from an unread one on
    a constructed case where both occur on the same page.
-4. NORMALISED and STRICT are numerically unchanged for every page — verified by
+4. A prediction keeping 3 rows of a 27-row statement and dropping the other 24
+   scores a substantial error rate, not a perfect one — the property that
+   distinguishes this design from the matched-cell denominator it replaced.
+5. NORMALISED and STRICT are numerically unchanged for every page — verified by
    scoring the corpus before and after and diffing the rows.
-5. `config/scoring.yml` alone answers what the table metric is configured to
+6. `config/scoring.yml` alone answers what the table metric is configured to
    do, without consulting Python.
-6. `scoring/` acquires no new dependency. `rapidfuzz` is already present, and
+7. `scoring/` acquires no new dependency. `rapidfuzz` is already present, and
    `apted` is not required by this design.
