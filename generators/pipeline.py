@@ -6,6 +6,7 @@ Usage:
     python -m generators.pipeline serialise
     python -m generators.pipeline preview CASE001
     python -m generators.pipeline export
+    python -m generators.pipeline extract --corpus <dir> --target <dir>
 
 The commands are ordered: `generate` renders and captures, `serialise` turns
 captured events into transcripts, `export` packages what those two produced.
@@ -28,6 +29,7 @@ from generators.bank_statement import render_bank_statement
 from generators.common import FitError
 from generators.content_engine import load_pools, reachable_blocked_names
 from generators.export import ExportError, export_corpus
+from generators.extraction_export import ExtractionExportError, export_extraction
 from generators.invoice import render_invoice
 from generators.layout_dsl.schema import LayoutSchemaError, validate_layout
 from generators.loader import load_generation_config, load_ground_truth, load_layout_registry
@@ -486,6 +488,48 @@ def export(
 
     rprint(f"[green]Exported {len(records)} documents into {root}.[/green]")
     rprint("[cyan]Verify every image against its sha256 in manifest.jsonl before scoring.[/cyan]")
+
+
+@app.command()
+def extract(
+    corpus: Annotated[Path, typer.Option("--corpus", help="An exported clean corpus.")],
+    target: Annotated[Path, typer.Option("--target", help="Where the extraction corpus is written.")],
+    ground_truth: Annotated[
+        Path, typer.Option("--ground-truth", help="Directory of <doc_type>.yml files.")
+    ] = Path("ground_truth"),
+    field_definitions: Annotated[
+        Path, typer.Option("--field-definitions", help="Path to field_definitions.yml.")
+    ] = Path("config/field_definitions.yml"),
+    date: Annotated[
+        str | None, typer.Option("--date", help="Corpus date stamp, YYYYMMDD. Defaults to today.")
+    ] = None,
+) -> None:
+    """Write the flat images and ground_truth.{jsonl,csv} an extractor reads.
+
+    The fourth projection of one authored truth, alongside `serialise`'s
+    Markdown, `tables`' HTML and `layout`'s annotations — extraction should
+    not be the one step needing a different invocation.
+
+    Raises:
+        typer.Exit: With code 1 when the ground truth and the corpus manifest
+            disagree about which cases exist.
+    """
+    date_stamp = date if date is not None else datetime.now().strftime("%Y%m%d")
+
+    try:
+        root = export_extraction(
+            corpus=corpus,
+            ground_truth_dir=ground_truth,
+            field_definitions=field_definitions,
+            target=target,
+            date_stamp=date_stamp,
+        )
+    except ExtractionExportError as exc:
+        rprint(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from None
+
+    rows = sum(1 for _ in (root / "ground_truth.jsonl").open(encoding="utf-8"))
+    rprint(f"[green]Extraction corpus: {root} ({rows} case(s)).[/green]")
 
 
 if __name__ == "__main__":
