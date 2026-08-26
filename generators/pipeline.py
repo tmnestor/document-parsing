@@ -238,6 +238,7 @@ def generate(
                 {
                     "case_id": str(case_id),
                     "doc_type": dtype,
+                    "layout_id": layout_ref,
                     "image_file": image_file,
                     "events": [event.as_dict() for event in recorder.events],
                 }

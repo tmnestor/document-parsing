@@ -1,9 +1,12 @@
 """Assemble the dated deliverable directory.
 
-Pure assembly: this module renders nothing and serialises nothing. It copies
-what `generate` and `serialise` already produced and adds the three artifacts
-that make a corpus interpretable away from this checkout — a hashed manifest,
-the policy that produced the transcripts, and the prompt they assume.
+Pure assembly: this module renders nothing and re-serialises nothing. It
+copies what `generate` and `serialise` already produced, adds the three
+artifacts that make a corpus interpretable away from this checkout — a hashed
+manifest, the policy that produced the transcripts, and the prompt they
+assume — and projects each page's captured events to the layout and table
+artifacts that ship beside it (`layout/*.json` via `generators.layout`,
+`tables/*.html` via `generators.tables`).
 
 **Why the manifest carries a hash.** Design §6.1 records a real failure behind
 this requirement: a scoring run pointed at the wrong-vintage ground truth
@@ -19,6 +22,16 @@ import shutil
 from pathlib import Path
 
 import yaml
+
+from generators.serialise import load_serialisation_policy
+from generators.tables import table_html
+
+# `generators.layout` is imported inside `export_corpus`, not here: it reaches
+# `generators.layout_dsl`, whose package `__init__` eagerly imports the render
+# engine and, through it, `content_engine` (Faker). `docparse-degrade` imports
+# this module for `manifest_record` alone, in an environment that deliberately
+# does not have Faker — a module-level import here would break that boundary
+# for a function `degrade` never calls.
 
 _CHUNK = 1024 * 1024
 _SCORING_POLICY_PATH = Path("config/scoring.yml")
@@ -248,6 +261,11 @@ def export_corpus(
 ) -> Path:
     """Assemble the dated deliverable directory.
 
+    Beside each image and transcript, this also writes the page's OmniDocBench
+    annotations (`layout/{stem}.json`, always) and its tables' HTML
+    (`tables/{stem}.html`, only when the page has one — absence is expressed
+    by omission, not by an empty file).
+
     Args:
         records: The event records `generate` wrote, one per document.
         images_root: Directory holding the rendered pages, possibly in
@@ -263,7 +281,11 @@ def export_corpus(
 
     Raises:
         ExportError: An image, transcript, the policy or the prompt is missing.
+        LayoutError: A page's annotations cannot be trusted — a degenerate
+            box, an incomplete reading order, or an unbalanced table stream.
     """
+    from generators.layout import layout_dets  # see the import-boundary note above
+
     for label, path, command in (
         ("serialisation policy", policy_path, "serialise"),
         ("prompt", prompt_path, "serialise"),
@@ -271,9 +293,12 @@ def export_corpus(
         if not path.exists():
             raise _missing(label, path, recover_command=command)
 
+    policy = load_serialisation_policy(policy_path)
+
     root = target / f"parsing_{date_stamp}"
     (root / "images").mkdir(parents=True, exist_ok=True)
     (root / "transcripts").mkdir(parents=True, exist_ok=True)
+    (root / "layout").mkdir(parents=True, exist_ok=True)
 
     manifest: list[dict] = []
     counts: dict[str, int] = {}
@@ -286,6 +311,29 @@ def export_corpus(
         row = manifest_record(source_image, source_transcript, doc_type)
         shutil.copy2(source_image, root / "images" / image_name)
         shutil.copy2(source_transcript, root / "transcripts" / source_transcript.name)
+
+        stem = Path(image_name).stem
+        # "tier" is hardcoded here: `degrade` copies these artifacts verbatim
+        # into every tier corpus, exactly as it copies transcripts, because a
+        # degraded page says the same thing and its elements sit in the same
+        # places. Rewriting it per tier is a follow-up, not this task.
+        attribute = {
+            "doc_type": doc_type,
+            "layout_id": str(record.get("layout_id", "")),
+            "tier": "clean",
+        }
+        annotations = layout_dets(record["events"], attribute=attribute, policy=policy)
+        (root / "layout" / f"{stem}.json").write_text(
+            json.dumps(annotations, indent=2) + "\n", encoding="utf-8"
+        )
+        row["layout"] = f"layout/{stem}.json"
+
+        tables = table_html(record["events"])
+        if tables:
+            (root / "tables").mkdir(parents=True, exist_ok=True)
+            (root / "tables" / f"{stem}.html").write_text("\n".join(tables) + "\n", encoding="utf-8")
+            row["tables"] = f"tables/{stem}.html"
+
         manifest.append(row)
         counts[doc_type] = counts.get(doc_type, 0) + 1
 

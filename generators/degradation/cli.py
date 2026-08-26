@@ -4,17 +4,18 @@ Runs in `docparse-degrade`, not `docparse`: it imports numpy, opencv and
 augraphy, which `docparse` deliberately does not have.
 
 **It consumes an exported corpus and produces exported corpora.** The output of
-each tier is a complete `parsing_*/` directory — images, transcripts, manifest,
-prompt, serialisation policy, README — so `score` and both parser runners work on
-it with no change and no new flags. The alternative, degrading `output/` and
-teaching every downstream tool about tiers, would have put the same knowledge in
-four places.
+each tier is a complete `parsing_*/` directory — images, transcripts, layout
+annotations, table HTML, manifest, prompt, serialisation policy, README — so
+`score` and both parser runners work on it with no change and no new flags. The
+alternative, degrading `output/` and teaching every downstream tool about
+tiers, would have put the same knowledge in four places.
 
-**Transcripts are copied byte for byte.** Degradation changes how legible a page
-is, never what it says, so the ground truth is identical and any score
-difference is attributable to image quality alone. The manifest is rebuilt
-because it hashes images, and those have changed — which is what stops a
-degraded prediction being scored against clean truth by accident.
+**Transcripts, layout annotations and table HTML are copied byte for byte.**
+Degradation changes how legible a page is, never what it says or where its
+elements sit, so the ground truth is identical and any score difference is
+attributable to image quality alone. The manifest is rebuilt because it hashes
+images, and those have changed — which is what stops a degraded prediction
+being scored against clean truth by accident.
 
 Usage:
     python -m generators.degradation.cli --corpus parsing_20260820 \\
@@ -160,6 +161,7 @@ def degrade(
         target = plan.out / f"{corpus.name}_{tier.family}-{tier.name}"
         (target / "images").mkdir(parents=True, exist_ok=True)
         (target / "transcripts").mkdir(parents=True, exist_ok=True)
+        (target / "layout").mkdir(parents=True, exist_ok=True)
 
         manifest: list[dict] = []
         with Progress(transient=True) as progress:
@@ -180,17 +182,27 @@ def degrade(
                 degraded.save(target / "images" / image_name, quality=95, subsampling=0)
 
                 # Byte for byte: the page says the same thing however badly it
-                # was scanned.
+                # was scanned, and its elements sit in the same places.
                 transcript_name = Path(record["transcript"]).name
                 shutil.copyfile(corpus / record["transcript"], target / "transcripts" / transcript_name)
 
-                manifest.append(
-                    manifest_record(
-                        target / "images" / image_name,
-                        target / "transcripts" / transcript_name,
-                        record["doc_type"],
-                    )
+                row = manifest_record(
+                    target / "images" / image_name,
+                    target / "transcripts" / transcript_name,
+                    record["doc_type"],
                 )
+
+                layout_name = Path(record["layout"]).name
+                shutil.copyfile(corpus / record["layout"], target / "layout" / layout_name)
+                row["layout"] = f"layout/{layout_name}"
+
+                if "tables" in record:
+                    (target / "tables").mkdir(parents=True, exist_ok=True)
+                    tables_name = Path(record["tables"]).name
+                    shutil.copyfile(corpus / record["tables"], target / "tables" / tables_name)
+                    row["tables"] = f"tables/{tables_name}"
+
+                manifest.append(row)
                 progress.advance(task)
 
         (target / "manifest.jsonl").write_text(
