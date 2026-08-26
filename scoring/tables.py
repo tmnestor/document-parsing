@@ -205,3 +205,51 @@ def compare_row(ref_cells: list[str], pred_cells: list[str], policy: dict) -> tu
         if value and any(other != index and predicted[other] == value for other in range(len(predicted))):
             misplaced += 1
     return width, correct, misplaced
+
+
+def score_tables(reference: str, prediction: str, policy: dict) -> dict:
+    """Score a page's tables cell by cell.
+
+    Never raises on prediction content. A model emitting nonsense is a result to
+    record, not an error to crash on; fail-fast in this package applies to
+    configuration, which `scoring.policy` validates before any page is scored.
+
+    Args:
+        reference: The corpus transcript.
+        prediction: The model's output.
+        policy: The whole validated policy mapping.
+
+    Returns:
+        The eight table fields of a scored row. `table_cell_error_rate` is None
+        when the reference holds no table cells to compare.
+    """
+    ref_tables = parse_tables(reference)
+    pred_tables = parse_tables(prediction)
+
+    compared = sum(len(row) for table in ref_tables for row in table)
+    correct = 0
+    misplaced = 0
+    missing = 0
+    spurious = 0
+
+    for index in range(max(len(ref_tables), len(pred_tables))):
+        ref_table = ref_tables[index] if index < len(ref_tables) else []
+        pred_table = pred_tables[index] if index < len(pred_tables) else []
+        pairs, table_missing, table_spurious = align_rows(ref_table, pred_table, policy)
+        missing += table_missing
+        spurious += table_spurious
+        for ref_row, pred_row in pairs:
+            _, row_correct, row_misplaced = compare_row(ref_row, pred_row, policy)
+            correct += row_correct
+            misplaced += row_misplaced
+
+    return {
+        "table_cell_error_rate": None if not compared else (compared - correct) / compared,
+        "table_cells_compared": compared,
+        "table_cells_correct": correct,
+        "table_cells_misplaced": misplaced,
+        "table_rows_missing": missing,
+        "table_rows_spurious": spurious,
+        "table_count_ref": len(ref_tables),
+        "table_count_pred": len(pred_tables),
+    }
