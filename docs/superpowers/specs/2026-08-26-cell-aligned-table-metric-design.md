@@ -91,9 +91,9 @@ filesystem access, and the metric runs against the already-shipped
 A **table line** is a line whose stripped form begins with `|`.
 A **table block** is a maximal run of consecutive table lines.
 
-Within a block, a **separator row** is a row whose cells are all empty or
-consist solely of `-` and `:` characters. Separator rows are discarded; they
-carry no content. Every other row is a data row, the header row included.
+Within a block, a **separator row** is a row whose cells consist solely of `-`
+and `:` characters. Separator rows are discarded; they carry no content.
+Every other row is a data row, the header row included.
 
 Cells are extracted by stripping the line, removing one leading and one
 trailing `|` when present, splitting on `|`, and stripping each cell.
@@ -374,11 +374,12 @@ extra cell. **Revisit if** any field value ever legitimately contains a pipe.
 **L3 — the error rate mixes placement failure with omission.** Counting dropped
 rows' cells as incorrect (§3.4) is what removes the gaming path, but it means a
 single number no longer separates "filed in the wrong column" from "never
-transcribed". `table_cells_misplaced` and `table_rows_missing` are reported
-alongside precisely to separate them, and the two causes are distinguishable
-from those counts. **Revisit if** a consumer needs placement isolated as its
-own rate; the matched-cell denominator can be added as a second field without
-disturbing this one.
+transcribed". `table_cells_misplaced`, `table_rows_missing` and
+`table_rows_spurious` are recorded on every row and summed into every
+aggregated report (`scoring/report.py`'s `aggregate`) precisely to separate
+them, and the two causes are distinguishable from those counts. **Revisit if**
+a consumer needs placement isolated as its own rate; the matched-cell
+denominator can be added as a second field without disturbing this one.
 
 **L4 — misplacement is detected within a row only.** A value moved to another
 row is reported through row alignment instead. **Revisit if** column-swap
@@ -424,6 +425,29 @@ A parser's structured output does have a legitimate use here that is not
 scoring: running Docling's `document.tables` beside `parse_tables()` on the same
 output is an independent check that this module recovers the grid the parser
 believed it wrote.
+
+**L6 — a table split or merged mid-page throws off every later pairing.** §3.3
+pairs reference table *k* with prediction table *k* by position. That reasons
+correctly about a table wholly omitted or wholly added (the unpaired case), but
+not about a table the prediction **splits or merges in the middle** — there,
+prediction table *k* corresponds to reference table *k*'s *tail*, and every
+pairing after it is off by one.
+
+Measured: inserting one blank line at the midpoint of the table region of every
+corpus page with at least six table lines — 104 pages, no other change, every
+cell's text identical — and scoring each against its own unmodified transcript
+gives a median `table_cell_error_rate` of `0.5505` (min `0.4933`, max `0.6667`).
+This is over-penalisation, not blindness — it cannot hide a genuine failure —
+but a reader seeing `0.55` will conclude the model misread half the page when
+it inserted one newline, and a VLM emitting a blank line at a visual section
+gap is not an exotic prediction.
+
+The failure has a signature the metric already emits, without any further
+computation: `table_count_pred > table_count_ref` with `table_rows_missing ==
+table_rows_spurious`. **Revisit if** a scored model's output shows this
+signature in practice; the remedy is to pair tables by content the way rows
+already are (§3.4), rather than by position — a design increment, not a review
+fix, and not proposed here.
 
 ---
 
