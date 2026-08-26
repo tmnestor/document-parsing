@@ -39,17 +39,30 @@ class TableHtmlError(RuntimeError):
     """Raised when a table's event stream cannot be rendered as HTML."""
 
 
-def _err(what: str, *, seq: int | None) -> TableHtmlError:
+_DEFAULT_EXPECTED = (
+    "a balanced table stream, e.g.\n"
+    "              table_open, row_open, cell..., row_close, ..., table_close"
+)
+_DEFAULT_RECOVER = (
+    "regenerate the corpus; a truncated stream means `generate` did not finish, and a re-run repairs it."
+)
+
+
+def _err(
+    what: str,
+    *,
+    seq: int | None,
+    expected: str = _DEFAULT_EXPECTED,
+    recover: str = _DEFAULT_RECOVER,
+) -> TableHtmlError:
     """Build a four-element fail-fast diagnostic."""
     where = f"events.jsonl -> seq {seq}" if seq is not None else "events.jsonl -> end of stream"
     return TableHtmlError(
         "Cannot render a table as HTML.\n"
         f"  What:     {what}\n"
         f"  Where:    {where}\n"
-        "  Expected: a balanced table stream, e.g.\n"
-        "              table_open, row_open, cell..., row_close, ..., table_close\n"
-        "  Recover:  regenerate the corpus; a truncated stream means `generate` did not "
-        "finish, and a re-run repairs it."
+        f"  Expected: {expected}\n"
+        f"  Recover:  {recover}"
     )
 
 
@@ -134,6 +147,54 @@ def table_html(events: list[dict], policy: dict) -> list[str]:
     return tables
 
 
+def _check_header_shape(rows: list[tuple[list[str], bool]]) -> None:
+    """Reject a header-flag shape neither projection can render the same way.
+
+    Exactly two shapes are renderable, and both projections agree on them:
+    every row `header=False` (the headerless case — this module's blank-
+    `<thead>` branch above, `serialise._render_table`'s `not rows[0][1]`
+    branch), or the header rows forming a contiguous prefix (the normal
+    case). For the prefix case, `serialise._render_table` never even reads
+    a row's `header` flag beyond `rows[0]` — it renders row 0 as the header
+    by position and every other row as an ordinary body line, in order.
+
+    Any other shape has no rendering here. A `header=True` row that follows
+    a `header=False` row lands in neither `head` (a single blank row in the
+    headerless branch, unrelated to any row's actual flag) nor `body`
+    (filtered to `not header`) and would vanish from the HTML with nothing
+    raised — while `serialise.py` would render the identical stream as an
+    ordinary row. 0 occurrences across the real 165-page corpus (179
+    tables); this guard exists so a future table primitive that emits this
+    shape fails loudly instead of silently dropping a row.
+
+    Args:
+        rows: Each row's cell texts, and whether it is a header row.
+
+    Raises:
+        TableHtmlError: A `header=True` row follows a `header=False` row.
+    """
+    seen_non_header = False
+    for index, (_cells, is_header) in enumerate(rows):
+        if not is_header:
+            seen_non_header = True
+        elif seen_non_header:
+            raise _err(
+                f"row {index} is flagged header=True after a non-header row — header flags "
+                f"are {[flag for _, flag in rows]}, neither all non-header nor a contiguous "
+                "header prefix.",
+                seq=None,
+                expected="either every row header=False (a headerless table, e.g. several "
+                "receipt layouts), or the header rows forming a contiguous prefix — the two "
+                "shapes serialise._render_table and tables._render can both render, e.g.\n"
+                "              [(cells, True), (cells, False), (cells, False)]",
+                recover="the table primitive that emitted this row "
+                "(generators/layout_dsl/primitives_table.py) must not mark a row header=True "
+                "once a non-header row has already been emitted for this table; serialise.py "
+                "and tables.py render such a stream differently, so the shape must be "
+                "resolved at the source rather than rendered here.",
+            )
+
+
 def _render(rows: list[tuple[list[str], bool]], columns: list[str], policy: dict) -> str:
     """Render collected rows as one HTML table.
 
@@ -153,10 +214,14 @@ def _render(rows: list[tuple[list[str], bool]], columns: list[str], policy: dict
         `headerless_table` — the only enum value this serialiser implements.
 
     Raises:
-        TableHtmlError: A row carries more cells than `columns` declares.
+        TableHtmlError: A row carries more cells than `columns` declares, or
+            a `header=True` row follows a `header=False` row — a shape this
+            module and `serialise.py` cannot both render the same way.
     """
     if policy["carry_group_key"] == "down":
         rows = carry_group_key_down(rows)
+
+    _check_header_shape(rows)
 
     width = len(columns)
     blank = policy["empty_cell_token"]
