@@ -142,7 +142,14 @@ class TranscriptRecorder:
         """
         return [e for e in self._events if e.category_type is not None and e.spans]
 
-    def emit(self, kind: str, text: str | None = None, *, category_type: str | None = None, **meta) -> int:
+    def emit(
+        self,
+        kind: str,
+        text: str | None = None,
+        *,
+        category_type: str | None = None,
+        **meta: object,
+    ) -> int:
         """Append an event and authorise the draw that follows it.
 
         Args:

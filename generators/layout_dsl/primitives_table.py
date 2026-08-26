@@ -363,6 +363,25 @@ def draw_table(block: dict, ctx: RenderContext, y: int) -> int:
         )
     )
     columns = block["columns"]
+    header_groups = resolve_param(
+        block,
+        ctx.layout,
+        "table_header_groups",
+        layout_id=ctx.layout_id,
+        layout_path=ctx.layout_path,
+        block_key="header_groups",
+    )
+    row_span_key = resolve_param(
+        block,
+        ctx.layout,
+        "table_row_span_key",
+        layout_id=ctx.layout_id,
+        layout_path=ctx.layout_path,
+        block_key="row_span_key",
+    )
+    # "none" is the explicit no-op every layout declares; normalise it to None
+    # so the drawing code has one absent-value to test rather than two.
+    span_key = None if row_span_key in ("none", None) else str(row_span_key)
     dividers = resolve_param(
         block,
         ctx.layout,
@@ -452,6 +471,17 @@ def draw_table(block: dict, ctx: RenderContext, y: int) -> int:
     ):
         header_height = int(block["header_height"]) if "header_height" in block else advance
         fill_height = int(block["fill_height"]) if "fill_height" in block else header_height
+        if header_groups:
+            y = _draw_header_groups(
+                header_groups,
+                columns,
+                ctx,
+                y,
+                size=text_size,
+                bold=header_bold,
+                family=family,
+                advance=advance,
+            )
         y = _draw_header(
             columns,
             ctx,
@@ -472,6 +502,10 @@ def draw_table(block: dict, ctx: RenderContext, y: int) -> int:
 
     table_body_start = y
     total_rows = len(rows)
+    # Computed over the whole row list before drawing, because a run's length
+    # is only knowable by looking ahead — the merged cell must declare its
+    # rowspan on the first row of the run.
+    span_runs = row_span_runs(rows, span_key)
     index = 0
     previous_date = None
     first_row = True
@@ -548,6 +582,8 @@ def draw_table(block: dict, ctx: RenderContext, y: int) -> int:
             cell_line_spacing=cell_line_spacing,
             first_row=first_row,
             is_new_group=is_new_group,
+            span_key=span_key,
+            span_rows=span_runs[position],
         )
         if grouping == "inline" and not synthetic:
             previous_date = row.get("date")
@@ -583,6 +619,116 @@ def draw_table(block: dict, ctx: RenderContext, y: int) -> int:
         ctx.transcript.emit("table_close")
 
     return y
+
+
+def row_span_runs(rows: list, span_key: str | None) -> list[int]:
+    """How far each row's merged label cell spans, by position.
+
+    A run is consecutive rows carrying the same value under `span_key`. The
+    first row of a run gets the run's length; every other row in it gets 0,
+    meaning "this column is owned by the cell above — draw nothing and emit no
+    cell for it".
+
+    A synthetic row (an opening balance, a brought-forward line) never joins a
+    run: it is not one of the line items the label groups, and merging it in
+    would claim the page shows a grouping it does not.
+
+    Args:
+        rows: The provider's rows, in draw order.
+        span_key: The column key rows are merged on, or None for no merging.
+
+    Returns:
+        One count per row, in the same order. All ones when `span_key` is None.
+    """
+    if span_key is None:
+        return [1] * len(rows)
+
+    spans = [1] * len(rows)
+    start = 0
+    while start < len(rows):
+        if rows[start].get("synthetic"):
+            start += 1
+            continue
+        value = rows[start].get(span_key)
+        end = start + 1
+        while end < len(rows) and not rows[end].get("synthetic") and rows[end].get(span_key) == value:
+            end += 1
+        spans[start] = end - start
+        for position in range(start + 1, end):
+            spans[position] = 0
+        start = end
+    return spans
+
+
+def _draw_header_groups(
+    groups: list,
+    columns: list,
+    ctx: RenderContext,
+    y: int,
+    *,
+    size: int,
+    bold: bool,
+    family: str,
+    advance: int,
+) -> int:
+    """Draw the spanning header tier above the column-label row.
+
+    Each group's label is centred over the x-range its span covers, which is
+    what makes a spanning heading read as belonging to those columns rather
+    than to one of them. A group with an empty label draws nothing but still
+    emits its cell, keeping the tier rectangular without inventing text the
+    page does not show — the same reasoning as `headerless_table`.
+
+    The schema has already checked that the spans tile the columns exactly, so
+    this can index by column key without re-validating.
+
+    Args:
+        groups: `{label, span}` mappings, in column order.
+        columns: The table's columns.
+        ctx: The render context.
+        y: Top of the tier.
+        size: Label font size.
+        bold: Label weight.
+        family: Font family.
+        advance: One line's advance, used as the tier's height.
+
+    Returns:
+        The y below the tier.
+    """
+    font = load_font(size, family=family, bold=bold)
+    by_key = {str(column["key"]): column for column in columns}
+
+    if ctx.transcript is not None:
+        ctx.transcript.emit("row_open", None, header=True)
+        for position, group in enumerate(groups):
+            ctx.transcript.emit(
+                "cell",
+                str(group["label"]),
+                row=None,
+                col=position,
+                column_key=str(group["span"][0]),
+                header=True,
+                colspan=len(group["span"]),
+            )
+
+    for group in groups:
+        label = str(group["label"])
+        if not label:
+            continue
+        spanned = [by_key[str(key)] for key in group["span"]]
+        left = min(column_x(_label_anchor(column), ctx) for column in spanned)
+        right = max(column_x(_label_anchor(column), ctx) for column in spanned)
+        draw_text_left(ctx.draw, label, (left + right) // 2 - _text_width(label, font) // 2, y, font)
+
+    if ctx.transcript is not None:
+        ctx.transcript.emit("row_close")
+
+    return y + advance
+
+
+def _text_width(text: str, font) -> int:
+    """Width of `text` in `font`, for centring a spanning label."""
+    return int(font.getbbox(text)[2] - font.getbbox(text)[0])
 
 
 def _draw_header(
@@ -745,6 +891,8 @@ def _draw_row(
     cell_line_spacing: str,
     first_row: bool = False,
     is_new_group: bool = True,
+    span_key: str | None = None,
+    span_rows: int = 1,
 ) -> int:
     """Draw one row.
 
@@ -819,6 +967,14 @@ def _draw_row(
         ctx.transcript.emit("row_open")
 
     for position, column in enumerate(columns):
+        if span_key is not None and str(column["key"]) == span_key and span_rows == 0:
+            # This column is owned by the merged cell above: the page draws
+            # nothing here and the row emits no cell for it, so the HTML row
+            # is genuinely short by one and `inherited_columns` accounts for
+            # it. Emitting an empty cell instead would put a real cell where
+            # the page has none and shift every later column.
+            continue
+
         blanked_date = column["key"] == "date" and _date_is_redundant(grouping, is_new_group)
         text = "" if blanked_date else _cell_text(row, column)
 
@@ -829,14 +985,30 @@ def _draw_row(
         # extraction genuinely differ — extraction states the date, this states
         # what the page shows.
         if ctx.transcript is not None:
-            ctx.transcript.emit(
-                "cell",
-                text,
-                row=index,
-                col=position,
-                column_key=str(column["key"]),
-                header=False,
-            )
+            # `rowspan` is emitted only where it exceeds one, so a table with
+            # no merged cells produces exactly the event stream it always did.
+            # Two call sites rather than a **kwargs unpack: a keyword argument
+            # is type-checkable and an unpacked dict is not.
+            merged = span_key is not None and str(column["key"]) == span_key and span_rows > 1
+            if merged:
+                ctx.transcript.emit(
+                    "cell",
+                    text,
+                    row=index,
+                    col=position,
+                    column_key=str(column["key"]),
+                    header=False,
+                    rowspan=span_rows,
+                )
+            else:
+                ctx.transcript.emit(
+                    "cell",
+                    text,
+                    row=index,
+                    col=position,
+                    column_key=str(column["key"]),
+                    header=False,
+                )
 
         if not text:
             continue
