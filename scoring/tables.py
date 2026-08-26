@@ -20,7 +20,15 @@ Pure by contract: data in, data out. No filesystem, no CLI, and no import of
 
 import re
 
+from rapidfuzz.distance import Levenshtein
+
+from scoring.normalise import normalise
+
 _SEPARATOR_CELL = re.compile(r"^[\s:\-]*$")
+
+# A cell separator that cannot occur inside a cell, so two different rows cannot
+# collide on one signature by splitting their text differently.
+_SIGNATURE_JOIN = "\x1f"
 
 
 def _split_row(stripped: str) -> list[str]:
@@ -88,3 +96,72 @@ def parse_tables(text: str) -> list[list[list[str]]]:
     if current:
         tables.append(current)
     return tables
+
+
+def _cell_form(cell: str, policy: dict) -> str:
+    """Return the text form cell equality uses, under the configured policy.
+
+    Args:
+        cell: One cell's text.
+        policy: The whole validated policy mapping.
+
+    Returns:
+        The cell normalised, or the cell unchanged under `strict`.
+    """
+    if policy["tables"]["cell_comparison"] == "strict":
+        return cell
+    return normalise(cell, policy["normalisation"])
+
+
+def row_signature(cells: list[str], policy: dict) -> str:
+    """Reduce a row to the string alignment compares.
+
+    Args:
+        cells: The row's cells.
+        policy: The whole validated policy mapping.
+
+    Returns:
+        The cells in their comparison form, joined by a separator that cannot
+        appear inside a cell.
+    """
+    return _SIGNATURE_JOIN.join(_cell_form(cell, policy) for cell in cells)
+
+
+def align_rows(
+    ref_rows: list[list[str]], pred_rows: list[list[str]], policy: dict
+) -> tuple[list[tuple[list[str], list[str]]], int, int]:
+    """Pair reference rows with prediction rows by content.
+
+    Sequence alignment rather than position: a model that drops one row should
+    be charged one missing row, not charged again for every row after it, which
+    is what strict positional comparison would do.
+
+    Args:
+        ref_rows: The reference table's rows.
+        pred_rows: The prediction table's rows.
+        policy: The whole validated policy mapping.
+
+    Returns:
+        `(pairs, rows_missing, rows_spurious)`. Pairs are `(ref_row, pred_row)`
+        in reference order. Missing counts reference rows with no counterpart;
+        spurious counts prediction rows with none.
+    """
+    ref_signatures = [row_signature(row, policy) for row in ref_rows]
+    pred_signatures = [row_signature(row, policy) for row in pred_rows]
+
+    pairs: list[tuple[list[str], list[str]]] = []
+    missing = 0
+    spurious = 0
+    for op in Levenshtein.opcodes(ref_signatures, pred_signatures):
+        if op.tag in ("equal", "replace"):
+            ref_slice = ref_rows[op.src_start : op.src_end]
+            pred_slice = pred_rows[op.dest_start : op.dest_end]
+            paired = min(len(ref_slice), len(pred_slice))
+            pairs.extend(zip(ref_slice[:paired], pred_slice[:paired], strict=True))
+            missing += len(ref_slice) - paired
+            spurious += len(pred_slice) - paired
+        elif op.tag == "delete":
+            missing += op.src_end - op.src_start
+        elif op.tag == "insert":
+            spurious += op.dest_end - op.dest_start
+    return pairs, missing, spurious
