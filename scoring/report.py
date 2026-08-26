@@ -180,7 +180,22 @@ def report(
                     expected="a JSONL file written by `python -m scoring.score --out`.",
                     recover="run scoring.score first, or correct the path.",
                 )
-            rows += [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+            loaded_rows = [
+                json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line
+            ]
+            for row in loaded_rows:
+                if "table_cell_error_rate" not in row:
+                    raise diagnostic(
+                        f"{path} was scored before the table cell metric existed — its rows "
+                        "have no 'table_cell_error_rate' field.",
+                        path=path.resolve(),
+                        key="table_cell_error_rate",
+                        expected="every row written by the current `scoring.score` carries "
+                        "table_cell_error_rate (a float, or null when the page had no table).",
+                        recover=f"re-score {path.name} with the current `python -m scoring.score` "
+                        "to regenerate it with the table metric included.",
+                    )
+            rows += loaded_rows
     except ScoringError as exc:
         rprint(f"[red]{exc}[/red]")
         raise typer.Exit(1) from None
