@@ -30,11 +30,12 @@ _invoice_field_budgets: &invoice_field_budgets
   LINE_ITEM_DESC: {width: 870, fit: shrink, min_font: 12, max_lines: 1}
 
 # The party blocks move into 820px columns in the two `parties_split` layouts,
-# so their budgets cannot stay at the 1700px content width -- text would be
-# measured against a box it does not occupy and `shrink_then_wrap` would not
-# shrink an overflowing line. Everything else (fit, min_font, max_lines) is
-# unchanged, and LINE_ITEM_DESC is inherited: the items table still spans the
-# full page.
+# so their budgets cannot stay at the 1700px content width: schema validation
+# checks each budget's declared width against the region its block actually
+# draws into and fails fast, before any rendering, if the budget is wider (see
+# `_validate_text_budget` in generators/layout_dsl/schema.py). Everything else
+# (fit, min_font, max_lines) is unchanged, and LINE_ITEM_DESC is inherited:
+# the items table still spans the full page.
 _invoice_split_field_budgets: &invoice_split_field_budgets
   <<: *invoice_field_budgets
   SUPPLIER_NAME: {width: 820, fit: shrink_then_wrap, min_font: 12, max_lines: 2}
