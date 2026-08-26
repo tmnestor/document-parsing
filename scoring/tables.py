@@ -165,3 +165,43 @@ def align_rows(
         elif op.tag == "insert":
             spurious += op.dest_end - op.dest_start
     return pairs, missing, spurious
+
+
+def compare_row(ref_cells: list[str], pred_cells: list[str], policy: dict) -> tuple[int, int, int]:
+    """Compare one matched row's cells position by position.
+
+    Empty reference cells are compared like any other. That is the crux of the
+    metric: the misfile it exists to catch empties one cell and fills its
+    neighbour, so skipping empties would score the failure as a perfect row.
+
+    A prediction row shorter than the reference is padded with empty cells; a
+    longer one has its surplus ignored for correctness, though the surplus is
+    still searched when deciding whether a value was merely misplaced.
+
+    Args:
+        ref_cells: The reference row's cells.
+        pred_cells: The paired prediction row's cells.
+        policy: The whole validated policy mapping.
+
+    Returns:
+        `(compared, correct, misplaced)`. `compared` is the reference row's
+        width. `misplaced` counts incorrect cells whose non-empty reference
+        value appears at some other position in the same prediction row, and is
+        a diagnostic subset of the incorrect cells rather than a separate
+        bucket.
+    """
+    width = len(ref_cells)
+    reference = [_cell_form(cell, policy) for cell in ref_cells]
+    predicted = [_cell_form(cell, policy) for cell in pred_cells]
+    aligned = predicted[:width] + [""] * max(0, width - len(predicted))
+
+    correct = 0
+    misplaced = 0
+    for index in range(width):
+        if reference[index] == aligned[index]:
+            correct += 1
+            continue
+        value = reference[index]
+        if value and any(other != index and predicted[other] == value for other in range(len(predicted))):
+            misplaced += 1
+    return width, correct, misplaced
