@@ -17,8 +17,10 @@ pair_separator: ": "
 # layout drawing "Total:" cannot produce "Total:: $137.73".
 pair_strip_trailing_colon: true
 
-# Tables become pipe tables with a header separator row.
-table_style: pipe_with_header_rule
+# Tables become HTML tables: the header row in <thead>, the rest in <tbody>.
+# Markdown pipe tables cannot express merged cells, and HTML is what
+# OmniDocBench, MinerU and Docling score against.
+table_style: html
 
 # What an empty cell renders as. This covers two real cases: a column with no
 # value on this row, and a date deliberately blanked because its grouping

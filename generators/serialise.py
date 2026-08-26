@@ -18,12 +18,7 @@ from pathlib import Path
 
 import yaml
 
-from generators.decoration import strip_decoration_run
-
-# Temporary scaffolding: `_render_table` still needs these while the pipe path
-# exists. It and this import both go when `serialise` starts driving
-# `TableBuilder` instead of walking table events itself.
-from generators.tables import RowWidthError, _join_cell, carry_group_key_down, pad_row
+from generators.tables import TableBuilder
 
 REQUIRED_POLICY_KEYS: tuple[str, ...] = (
     "title_style",
@@ -52,7 +47,7 @@ MIN_DECORATION_RUN = 2
 # value outside these is a configuration error, not a silently-ignored setting.
 _ALLOWED: dict[str, tuple[str, ...]] = {
     "title_style": ("atx_h1",),
-    "table_style": ("pipe_with_header_rule",),
+    "table_style": ("html",),
     "split_order": ("column_major",),
     "carry_group_key": ("down", "none"),
     "headerless_table": ("empty_header_row",),
@@ -63,7 +58,7 @@ _EXAMPLES: dict[str, str] = {
     "title_style": "atx_h1",
     "pair_separator": '": "',
     "pair_strip_trailing_colon": "true",
-    "table_style": "pipe_with_header_rule",
+    "table_style": "html",
     "empty_cell_token": '""',
     "cell_sub_line_join": '" "',
     "cell_newline_join": '" "',
@@ -246,60 +241,6 @@ def pair_text(meta: dict, policy: dict) -> str:
     return f"{label}{policy['pair_separator']}{meta['value']}"
 
 
-def _render_table(columns: list[str], rows: list[tuple[list[str], bool]], policy: dict) -> str:
-    """Render captured rows as a pipe table with a header separator row.
-
-    A pipe table's first row is its header by definition, so a table that drew
-    no header on the page (several receipt layouts set `header: false`) must not
-    have its first line item promoted into that slot — a parser would read the
-    goods as column names. `headerless_table` decides what happens instead;
-    `empty_header_row` keeps the table parseable without inventing any text that
-    is not on the page.
-
-    Args:
-        columns: The table's column keys, in order.
-        rows: (cells, was_header) per captured row.
-        policy: The validated serialisation policy.
-
-    Returns:
-        The pipe table as one block.
-    """
-    if policy["carry_group_key"] == "down":
-        rows = carry_group_key_down(rows)
-
-    width = len(columns)
-    blank = policy["empty_cell_token"]
-    separator = "| " + " | ".join(["---"] * width) + " |"
-
-    def render(cells: list[str]) -> str:
-        try:
-            padded = pad_row(cells, width, blank)
-        except RowWidthError as err:
-            raise SerialisationError(
-                "Cannot render a table row.\n"
-                f"  What:     {err}\n"
-                "  Where:    generators/serialise.py -> _render_table\n"
-                "  Expected: every row's cell count to match table_open's declared columns "
-                f"({columns!r}), e.g. one cell per column.\n"
-                "  Recover:  a row emitted more cells than the table declared columns; check "
-                "the primitive that drew this row against its table_open."
-            ) from err
-        return "| " + " | ".join(padded) + " |"
-
-    lines: list[str] = []
-    if not rows[0][1]:
-        lines.append(render([blank] * width))
-        lines.append(separator)
-        lines.extend(render(cells) for cells, _ in rows)
-        return "\n".join(lines)
-
-    for index, (cells, _) in enumerate(rows):
-        lines.append(render(cells))
-        if index == 0:
-            lines.append(separator)
-    return "\n".join(lines)
-
-
 def serialise(events: list[dict], policy: dict) -> str:
     """Turn one document's event stream into its Markdown transcript.
 
@@ -316,18 +257,21 @@ def serialise(events: list[dict], policy: dict) -> str:
             must fail loudly rather than vanish from every transcript.
     """
     blocks: list[str] = []
-
-    columns: list[str] = []
-    table_rows: list[tuple[list[str], bool]] = []
-    row: list[str] = []
-    row_keys: list[str] = []
-    row_is_header = False
-    in_table = False
+    builder = TableBuilder(policy)
 
     for event in events:
         kind = event["kind"]
         text = event["text"]
         meta = event.get("meta", {})
+
+        if kind in TableBuilder.KINDS:
+            # One walk, driven by both projections. Placement stays a property
+            # of the walk: the table lands where its table_close occurred, and
+            # its bytes are the bytes `tables/{stem}.html` ships.
+            html = builder.feed(event)
+            if html is not None:
+                blocks.append(html)
+            continue
 
         if kind in _STRUCTURE:
             # Structure only. Column order is already `column_major` in the
@@ -341,40 +285,6 @@ def serialise(events: list[dict], policy: dict) -> str:
             blocks.append(str(text))
         elif kind == "pair":
             blocks.append(pair_text(meta, policy))
-        elif kind == "table_open":
-            in_table = True
-            columns = [str(key) for key in meta["columns"]]
-            table_rows = []
-        elif kind == "row_open":
-            row, row_keys, row_is_header = [], [], False
-        elif kind == "cell":
-            row.append(_join_cell(str(text or policy["empty_cell_token"]), policy))
-            row_keys.append(str(meta.get("column_key", "")))
-            row_is_header = row_is_header or bool(meta.get("header"))
-        elif kind == "cell_sub_line":
-            # Folded into the cell it belongs to, found by column key so a
-            # sub-line under column 2 cannot land on column 0.
-            #
-            # Stripped before the fold, not after: the run is trailing on the
-            # sub-line, and folding first would bury it mid-cell where the
-            # pattern no longer matches.
-            key = str(meta.get("column_key", ""))
-            if key in row_keys:
-                position = row_keys.index(key)
-                content = strip_decoration_run(
-                    str(text or ""),
-                    glyphs=policy["decoration_glyphs"],
-                    min_run=policy["decoration_min_run"],
-                )
-                row[position] = f"{row[position]}{policy['cell_sub_line_join']}{content}"
-        elif kind == "row_close":
-            table_rows.append((row, row_is_header))
-            row, row_keys, row_is_header = [], [], False
-        elif kind == "table_close":
-            if table_rows:
-                blocks.append(_render_table(columns, table_rows, policy))
-            in_table = False
-            columns, table_rows = [], []
         else:
             raise SerialisationError(
                 "Unknown event kind.\n"
@@ -387,15 +297,9 @@ def serialise(events: list[dict], policy: dict) -> str:
                 "event table in the design doc's §4.3."
             )
 
-    if in_table:
-        raise SerialisationError(
-            "Unbalanced event stream.\n"
-            "  What:     a table_open was never closed by a table_close.\n"
-            "  Where:    the document's captured event stream\n"
-            "  Expected: every table_open matched by a table_close, which "
-            "`draw_table` emits on every path.\n"
-            "  Recover:  regenerate this document; if it recurs, a table "
-            "primitive is returning early without closing its events."
-        )
+    # Raises TableHtmlError with the same four-element shape for an unclosed
+    # table, so the bespoke SerialisationError this replaced was a second
+    # implementation of one diagnostic.
+    builder.finish()
 
     return policy["block_separator"].join(blocks)

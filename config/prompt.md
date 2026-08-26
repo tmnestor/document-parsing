@@ -17,8 +17,8 @@ boilerplate wording, and do not add anything the page does not show.
 Follow these conventions exactly.
 
 **Use only this small Markdown subset.** A single `#` heading for the page's own
-title, plain paragraph lines for ordinary text, and pipe tables for tables.
-Nothing else.
+title, plain paragraph lines for ordinary text, and HTML `<table>` elements for
+tables. Nothing else.
 
 **The `#` heading is the document's title, and there is exactly one per page.**
 It is the name of the document or of the business that issued it, printed at the
@@ -41,9 +41,8 @@ A run is **four or more** of `.` `-` `_` `=` `*` in a row. Three or fewer is
 ordinary punctuation and is kept, so an ellipsis and a decimal point are written
 as printed, and a hyphen inside a range or a date stays where it is.
 
-This applies to text **on the page**. It does not apply to the `| --- |`
-separator row of a pipe table, which is Markdown you are writing and must still
-be there.
+This applies to text **on the page**. It does not apply to the table markup you
+are writing, which is not text printed on the page.
 
 For example, where a statement pads a reference out to a fixed width and rules a
 line beneath a section:
@@ -71,12 +70,12 @@ placeholder.
 "Date" beside "04/03/2025" becomes `Date: 04/03/2025`. Write the label once,
 with a single colon and space, even if the page draws its own colon.
 
-**Tables become pipe tables with a header separator row**, like this:
+**Tables become HTML tables**: the column headings in a `<thead>` row of `<th>`
+cells, every other row in `<tbody>` as `<td>` cells, like this:
 
-```
-| Date | Reference | Charge |
-| --- | --- | --- |
-| 26/11/2019 | Sprocket Housing 6mm | $19.07 |
+```html
+<table><thead><tr><th>Date</th><th>Reference</th><th>Charge</th></tr></thead>
+<tbody><tr><td>03/02/2011</td><td>Flange Coupler 3mm</td><td>$71.42</td></tr></tbody></table>
 ```
 
 Keep one cell per column on every row. Where a cell is blank on the page, leave
@@ -86,14 +85,13 @@ across.
 **A list of items with amounts beside them is a table, even when it has no
 column headings and no lines drawn between the columns.** A receipt's list of
 purchases is the common case: the item names form one column and the prices
-form another, because they line up vertically down the page. Write it as a pipe
-table with an EMPTY header row, like this:
+form another, because they line up vertically down the page. Write it as a table
+with an EMPTY header row, like this:
 
-```
-|  |  |
-| --- | --- |
-| Lanyard Clip 2pk | 19.23 |
-| Gasket Ring 40mm | 19.53 |
+```html
+<table><thead><tr><th></th><th></th></tr></thead>
+<tbody><tr><td>Toggle Latch 5pk</td><td>63.18</td></tr>
+<tr><td>Spindle Cap 9mm</td><td>63.71</td></tr></tbody></table>
 ```
 
 Do not promote the first line of data into the heading, and do not invent column
@@ -107,12 +105,13 @@ thing: the date may sit on a band of its own across the table, or it may sit in
 the date cell of the group's first entry. Either way, put the date in the date
 cell of **every** row of that group, and do not give the date a row of its own:
 
-```
-| 14/03/2018 | Ratchet Spanner 8mm | 19.67 |
-| 14/03/2018 | Torque Bar 12mm | 19.89 |
+```html
+<table><thead><tr><th>Date</th><th>Description</th><th>Debit</th></tr></thead>
+<tbody><tr><td>09/07/2013</td><td>Bracket Shim 2mm</td><td>82.31</td></tr>
+<tr><td>09/07/2013</td><td>Anchor Bolt 16mm</td><td>82.75</td></tr></tbody></table>
 ```
 
-not a row containing only `14/03/2018` followed by rows with an empty date.
+not a row containing only `09/07/2013` followed by rows with an empty date.
 Every row should stand on its own.
 
 Carry a date **downwards only**. Where a row's date cell is blank and no date
