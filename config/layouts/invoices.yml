@@ -29,6 +29,20 @@ _invoice_field_budgets: &invoice_field_budgets
   PAYER_ADDRESS: {width: 1700, fit: shrink_then_wrap, min_font: 12, max_lines: 2}
   LINE_ITEM_DESC: {width: 870, fit: shrink, min_font: 12, max_lines: 1}
 
+# The party blocks move into 820px columns in the two `parties_split` layouts,
+# so their budgets cannot stay at the 1700px content width -- text would be
+# measured against a box it does not occupy and `shrink_then_wrap` would not
+# shrink an overflowing line. Everything else (fit, min_font, max_lines) is
+# unchanged, and LINE_ITEM_DESC is inherited: the items table still spans the
+# full page.
+_invoice_split_field_budgets: &invoice_split_field_budgets
+  <<: *invoice_field_budgets
+  SUPPLIER_NAME: {width: 820, fit: shrink_then_wrap, min_font: 12, max_lines: 2}
+  BUSINESS_ADDRESS: {width: 820, fit: shrink_then_wrap, min_font: 12, max_lines: 2}
+  ABN_LINE: {width: 820, fit: shrink, min_font: 12, max_lines: 1}
+  PAYER_NAME: {width: 820, fit: shrink_then_wrap, min_font: 12, max_lines: 2}
+  PAYER_ADDRESS: {width: 820, fit: shrink_then_wrap, min_font: 12, max_lines: 2}
+
 # The ex-GST subtotal exists nowhere in ground truth: the legacy renderer
 # computed TOTAL_AMOUNT - GST_AMOUNT inline. See generators/layout_dsl/
 # field_providers.py's computed_totals, which every receipt already uses.
@@ -122,6 +136,41 @@ _invoice_payer_address: &invoice_payer_address
   {type: text, content: "{PAYER_ADDRESS}", budget: PAYER_ADDRESS,
    field: PAYER_ADDRESS, line_advance: 44, when: PAYER_ADDRESS}
 _invoice_buyer_gap: &invoice_buyer_gap {type: spacer, height: 28, when: PAYER_NAME}
+
+# The construct subsystem B1 exists to create. `config/prompt.md` already tells
+# the model to read one column fully before starting the next, and
+# `config/serialisation.yml` already sets `split_order: column_major` -- but no
+# page in the corpus had two non-empty columns, so nothing tested either. The
+# transcript reads the whole left block then the whole right block, which is
+# textually identical to the stacked layouts: the difference is on the page.
+_invoice_parties_split: &invoice_parties_split
+  type: split
+  widths: [820, 820]
+  gap: 60
+  children:
+    - - *invoice_seller_name
+      - *invoice_seller_address
+      - *invoice_seller_abn
+    - - *invoice_bill_to
+      - *invoice_payer_name
+      - *invoice_payer_address
+
+# Identical but for the vertical rule down the gap. Separate from the plain
+# variant so the rule's effect is attributable: a model may read column-major
+# when a line marks the boundary and row-major when nothing does, and one
+# layout carrying both cues could not distinguish those.
+_invoice_parties_ruled: &invoice_parties_ruled
+  type: split
+  widths: [820, 820]
+  gap: 60
+  divider: true
+  children:
+    - - *invoice_seller_name
+      - *invoice_seller_address
+      - *invoice_seller_abn
+    - - *invoice_bill_to
+      - *invoice_payer_name
+      - *invoice_payer_address
 
 # A pair, not a text: legacy recorded only the value's own box, offset past the
 # "Date: " label it drew in the same string.
@@ -315,6 +364,47 @@ layouts:
       - *invoice_bill_to
       - *invoice_payer_name
       - *invoice_payer_address
+      - *invoice_buyer_gap
+      - *invoice_date
+      - *invoice_rule
+      - *invoice_line_items
+      - *invoice_table_gap
+      - *invoice_rule
+      - *invoice_totals_separate
+      - *invoice_payment_terms
+
+  tax_invoice_parties_split:
+    <<: *invoice_page
+    field_budgets: *invoice_split_field_budgets
+    field_providers: *invoice_field_providers
+    defaults:
+      <<: *invoice_defaults_values
+    # tax_invoice_standard's body, with the six stacked party blocks replaced
+    # by one two-column split.
+    body:
+      - *invoice_title
+      - *invoice_rule
+      - *invoice_parties_split
+      - *invoice_buyer_gap
+      - *invoice_date
+      - *invoice_rule
+      - *invoice_line_items
+      - *invoice_table_gap
+      - *invoice_rule
+      - *invoice_totals_separate
+      - *invoice_payment_terms
+
+  tax_invoice_parties_ruled:
+    <<: *invoice_page
+    field_budgets: *invoice_split_field_budgets
+    field_providers: *invoice_field_providers
+    defaults:
+      <<: *invoice_defaults_values
+    # Identical to tax_invoice_parties_split but for the divider.
+    body:
+      - *invoice_title
+      - *invoice_rule
+      - *invoice_parties_ruled
       - *invoice_buyer_gap
       - *invoice_date
       - *invoice_rule
