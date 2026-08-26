@@ -14,6 +14,13 @@ matched 22 of 165 filenames and still produced a plausible number. Filename
 matching cannot detect that. A sha256 per image makes the mismatch impossible to
 score around rather than merely detectable after the fact — and it hashes the
 image, because the image is what a model reads.
+
+**And a second hash per transcript.** The image hash is blind to a change of
+serialisation policy: re-emitting every transcript moves no pixel, so a scorer
+holding the previous vintage's predictions verifies every image hash and scores
+garbage. The HTML table format change on 2026-08-26 was exactly that case, so
+the guard that exists to make wrong-vintage scoring impossible has to be able to
+see it.
 """
 
 import hashlib
@@ -88,7 +95,8 @@ def manifest_record(image: Path, transcript: Path, doc_type: str) -> dict:
         doc_type: The document type key, e.g. "invoices".
 
     Returns:
-        `{"image", "transcript", "doc_type", "sha256"}` per design §6.1.
+        `{"image", "transcript", "doc_type", "sha256", "transcript_sha256"}`
+        per design §6.1.
 
     Raises:
         ExportError: Either file is missing.
@@ -102,6 +110,11 @@ def manifest_record(image: Path, transcript: Path, doc_type: str) -> dict:
         "transcript": f"transcripts/{transcript.name}",
         "doc_type": doc_type,
         "sha256": sha256_of(image),
+        # The image hash cannot see a serialisation-policy change: re-emitting
+        # every transcript moves no pixel, so a scorer holding last vintage's
+        # predictions verifies every image hash and scores garbage. Hashing the
+        # transcript closes that for this change and every future one.
+        "transcript_sha256": sha256_of(transcript),
     }
 
 
@@ -264,7 +277,7 @@ never recovered by OCR or by hand.
 | `transcripts/` | The canonical transcript for each page, same stem. |
 | `layout/` | OmniDocBench-shaped `layout_dets` per page: boxes, categories, reading order. |
 | `tables/` | Table HTML for TEDS, one file per page with a table ({tabled} of {total}; absent otherwise). |
-| `manifest.jsonl` | One row per case: image, transcript, doc_type, sha256, layout, tables. |
+| `manifest.jsonl` | One row per case: paths, doc_type, both hashes, layout, tables. |
 | `prompt.md` | The prompt these transcripts assume. |
 | `serialisation.yml` | The exact policy that produced these transcripts. |
 {multi_table_note}
@@ -350,13 +363,19 @@ cross-benchmark comparison it cannot support.
 
 ## Verify before you score
 
-Check every image against its `sha256` in `manifest.jsonl` before scoring.
+Check every image against its `sha256` **and every transcript against its
+`transcript_sha256`** in `manifest.jsonl` before scoring.
 
 This is not ceremony. Scoring a run against the wrong-vintage ground truth is
 the failure this manifest exists to prevent: filenames alone can match well
 enough to produce a plausible number while comparing the wrong pages. If a hash
 does not match, the corpus and the predictions are not the same vintage, and any
 score from them is meaningless.
+
+The transcript hash matters independently of the image hash. Re-emitting the
+corpus under a changed serialisation policy moves no pixel, so every image hash
+still matches while the ground truth has changed underneath. An image hash alone
+cannot see that; the transcript hash can.
 
 ## How to score
 
