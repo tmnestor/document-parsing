@@ -9,6 +9,13 @@ explicit degenerate count keeps both failure modes visible.
 Absent predictions are counted separately and excluded from the distribution: a
 page the model never answered is not a score of anything, but it must not
 disappear either.
+
+The table diagnostic counts (`table_cells_misplaced`, `table_rows_missing`,
+`table_rows_spurious`) are summed per group here rather than left on
+`rows.jsonl` alone: `table_cell_error_rate`'s denominator is deliberately blind
+to prediction-only content, so a page of fabricated rows can score a perfect
+table cell error rate. Surfacing these counts in the same report is what makes
+that blind spot visible instead of silent.
 """
 
 import csv
@@ -56,7 +63,11 @@ def aggregate(rows: list[dict], group_by: tuple[str, ...], policy: dict) -> list
         policy: The validated policy, read for `reporting.percentiles`.
 
     Returns:
-        One summary per group, ordered by the group key tuple.
+        One summary per group, ordered by the group key tuple. Besides the
+        percentile/mean fields from `_METRICS`, each summary carries the
+        table diagnostic counts (`table_cells_misplaced`, `table_rows_missing`,
+        `table_rows_spurious`) summed exactly, like `degenerate`, rather than
+        run through the percentile machinery that is for error rates.
     """
     percentiles = [int(p) for p in policy["reporting"]["percentiles"]]
     buckets: dict[tuple, list[dict]] = {}
@@ -70,6 +81,15 @@ def aggregate(rows: list[dict], group_by: tuple[str, ...], policy: dict) -> list
         group["pages"] = len(bucket)
         group["missing"] = len(bucket) - len(scored)
         group["degenerate"] = sum(1 for r in bucket if r["degenerate"])
+        # Integer counts, not rates: summed exactly, like `degenerate`, not put
+        # through `_percentile` — p100 there means worst-case error rate, which
+        # has no meaning for a count. Safe unguarded on `scored`: every row that
+        # reaches `aggregate` has already passed the CLI's `table_cell_error_rate`
+        # presence check, and `score_page` writes all eight table fields together
+        # (as ints when `prediction_present`, or all `None` when absent).
+        group["table_cells_misplaced"] = sum(r["table_cells_misplaced"] for r in scored)
+        group["table_rows_missing"] = sum(r["table_rows_missing"] for r in scored)
+        group["table_rows_spurious"] = sum(r["table_rows_spurious"] for r in scored)
         group["verified"] = all(r["verified"] for r in bucket)
         for metric in _METRICS:
             values = [float(r[metric]) for r in scored if r[metric] is not None]
