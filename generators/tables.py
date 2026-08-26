@@ -6,14 +6,15 @@ change and every table re-emit in seconds without re-rendering an image
 (design §6 of the original spec, applied to a third projection).
 
 Taking the policy is not optional: a page draws a date-grouped table's date
-once, and `serialise._render_table` carries that date onto every row of the
-group (`carry_group_key_down`) so a reader never needs a row that means
-"repeat the row above". Without the same policy, this module's HTML disagreed
-with the Markdown transcript on which cells hold a date — 34 of 55 bank
-statements, corpus-wide — and disagreed with `config/prompt.md`'s own
-instruction to the model. `carry_group_key_down` and `_join_cell` are imported
-from `serialise.py` rather than re-implemented, the same shared-helper ruling
-already applied to `pair_text`. A sub-line's dot leader (§ the `cell_sub_line`
+once, and the transcript carries that date onto every row of the group
+(`carry_group_key_down`) so a reader never needs a row that means "repeat the
+row above". Without the same policy, this module's HTML disagreed with the
+Markdown transcript on which cells hold a date — 34 of 55 bank statements,
+corpus-wide — and disagreed with `config/prompt.md`'s own instruction to the
+model. `carry_group_key_down`, `_join_cell` and `pad_row` therefore live here,
+the one place every table projection reads them from, rather than being
+re-implemented per projection — the same shared-helper ruling already applied
+to `pair_text`. A sub-line's dot leader (§ the `cell_sub_line`
 branch below) gets the same treatment: stripped with `strip_decoration_run`
 under `decoration_glyphs`/`decoration_min_run` and joined with
 `cell_sub_line_join`, exactly as `serialise.serialise` does — not a second,
@@ -32,7 +33,6 @@ with subsystem B.
 import html as html_escape
 
 from generators.decoration import strip_decoration_run
-from generators.serialise import RowWidthError, _join_cell, carry_group_key_down, pad_row
 
 
 class TableHtmlError(RuntimeError):
@@ -64,6 +64,126 @@ def _err(
         f"  Expected: {expected}\n"
         f"  Recover:  {recover}"
     )
+
+
+def _join_cell(text: str, policy: dict) -> str:
+    """Fold an authored line break inside a cell onto one line.
+
+    A pipe table cell is single-line, so a header authored as
+    "Date of\\nTransaction" must be joined. Which joiner is policy, not code.
+    """
+    return policy["cell_newline_join"].join(part for part in text.split("\n"))
+
+
+def carry_group_key_down(
+    rows: list[tuple[list[str], bool]],
+) -> list[tuple[list[str], bool]]:
+    """Carry a grouped date onto every row of its group, so each row stands alone.
+
+    The corpus draws a date group two ways, and which one a page gets is a
+    layout detail no reader of the page can see:
+
+    * **as a band** — a row containing only the date, then that day's
+      transactions with an empty date cell (`nab_dense`, `cba_date_grouped`,
+      `nab_classic`);
+    * **on the first row** — the date in the first transaction's own date cell,
+      with the rest of the group left blank (`Date of Transaction` layouts).
+
+    Both mean "these rows belong to the date above". Carrying only the first
+    left the corpus contradicting itself: measured 2026-08-19, 123 transaction
+    rows across 7 statements kept a blank date while 329 rows on 27 other
+    statements had theirs filled in. `prompt.md` states one rule, so a model
+    obeying it was right on one layout family and wrong on the other —
+    gemma-4-12B replicated dates onto 97.8% of grouped rows against a truth of
+    79.8%, and every over-dated row failed to align.
+
+    This **departs from recording only what the page shows**: the page prints
+    the date once. It is the one place the corpus infers rather than
+    transcribes, taken deliberately so that every row is self-contained.
+
+    A group header is a row whose first cell has content and whose other cells
+    are all empty. A trailing header with nothing beneath it is kept — dropping
+    it would lose the only record that the date was on the page at all. A blank
+    first cell with no date anywhere above it stays blank: an opening-balance
+    row genuinely predates the first group, and there is nothing to carry.
+
+    Args:
+        rows: (cells, was_header) per captured row, in order.
+
+    Returns:
+        The rows with the group key carried onto every row of its group.
+    """
+    carried: list[tuple[list[str], bool]] = []
+    pending: tuple[list[str], bool] | None = None
+    pending_used = False
+    last_key = ""
+
+    for cells, was_header in rows:
+        if was_header:
+            carried.append((cells, was_header))
+            continue
+
+        is_group_header = (
+            bool(cells) and bool(cells[0].strip()) and not any(cell.strip() for cell in cells[1:])
+        )
+        if is_group_header:
+            # A header that headed nothing is kept rather than lost: it is the
+            # only record that the date was on the page.
+            if pending is not None and not pending_used:
+                carried.append(pending)
+            pending, pending_used = (cells, was_header), False
+            last_key = cells[0]
+            continue
+
+        if cells and not cells[0].strip():
+            if last_key.strip():
+                cells = [last_key, *cells[1:]]
+                if pending is not None:
+                    pending_used = True
+        elif cells:
+            last_key = cells[0]
+        carried.append((cells, was_header))
+
+    if pending is not None and not pending_used:
+        carried.append(pending)
+    return carried
+
+
+class RowWidthError(ValueError):
+    """Raised when a row carries more cells than its table declares columns.
+
+    A plain `ValueError` rather than a module error type: padding is shared by
+    every table projection, so this stays a caller-agnostic signal each caller
+    wraps into its own four-element diagnostic rather than a second
+    implementation of padding.
+    """
+
+
+def pad_row(cells: list[str], width: int, blank: str) -> list[str]:
+    """Pad one row's cells to a table's column width.
+
+    The single implementation of padding, used by every table projection so
+    they cannot compute it two different ways and drift apart.
+
+    Args:
+        cells: The row's cell texts, in column order.
+        width: The table's column count, from `table_open`'s `columns`.
+        blank: The token a short row's missing cells are filled with.
+
+    Returns:
+        `cells` padded on the right to exactly `width` entries.
+
+    Raises:
+        RowWidthError: `cells` has more entries than `width`. Truncating
+            silently would drop a real cell rather than pad a missing one —
+            the same class of hole an earlier fix round closed for an
+            unclosed row.
+    """
+    if len(cells) > width:
+        raise RowWidthError(
+            f"a row has {len(cells)} cell(s) but the table declares {width} column(s): {cells!r}"
+        )
+    return list(cells) + [blank] * (width - len(cells))
 
 
 def table_html(events: list[dict], policy: dict) -> list[str]:
