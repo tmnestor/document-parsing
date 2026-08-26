@@ -966,3 +966,213 @@ CASE055:
     LINE_ITEM_TOTAL_PRICES: 632.84|18541.67|1421.32
     PAYER_NAME: Sean Lewis
     PAYER_ADDRESS: 334 Grimes Ave, Alexandria NSW 2015
+CASE056:
+  layout: tax_invoice_parties_split
+  fields:
+    BUSINESS_ABN: '10 877 194 803'
+    BUSINESS_ADDRESS: 88 Kingsford Smith Dr, Hamilton QLD 4007
+    DOCUMENT_TYPE: INVOICE
+    GST_AMOUNT: '94.86'
+    INVOICE_DATE: 19/02/2024
+    IS_GST_INCLUDED: 'true'
+    LINE_ITEM_DESCRIPTIONS: Quarterly compliance audit|Document retention review
+    LINE_ITEM_PRICES: 612.40|336.24
+    LINE_ITEM_QUANTITIES: '1|1'
+    LINE_ITEM_TOTAL_PRICES: 612.40|336.24
+    PAYER_ADDRESS: 17 Rosebank Cr, Glenelg SA 5045
+    PAYER_NAME: Marguerite Okafor
+    SUPPLIER_NAME: Brightwater Advisory Partners
+    TOTAL_AMOUNT: '1043.50'
+CASE057:
+  layout: tax_invoice_parties_split
+  fields:
+    BUSINESS_ABN: '21 458 775 242'
+    BUSINESS_ADDRESS: 214 Foster St, Hawthorn East VIC 3123
+    DOCUMENT_TYPE: INVOICE
+    GST_AMOUNT: '183.09'
+    INVOICE_DATE: 14/03/2023
+    IS_GST_INCLUDED: 'true'
+    LINE_ITEM_DESCRIPTIONS: Contract review and drafting
+    LINE_ITEM_PRICES: '305.15'
+    LINE_ITEM_QUANTITIES: '6'
+    LINE_ITEM_TOTAL_PRICES: '1830.90'
+    PAYER_ADDRESS: 62 Turner Cres, Toowoomba QLD 4350
+    PAYER_NAME: Melissa Coates
+    SUPPLIER_NAME: Eastwick Legal Group
+    TOTAL_AMOUNT: '2013.99'
+CASE058:
+  layout: tax_invoice_parties_split
+  fields:
+    BUSINESS_ABN: '22 068 749 020'
+    BUSINESS_ADDRESS: 9 Lang St, Brunswick VIC 3056
+    DOCUMENT_TYPE: INVOICE
+    GST_AMOUNT: '5.67'
+    INVOICE_DATE: 02/05/2024
+    IS_GST_INCLUDED: 'true'
+    LINE_ITEM_DESCRIPTIONS: Payroll processing services|IT support and maintenance|Accounting
+      and bookkeeping
+    LINE_ITEM_PRICES: 18.50|22.90|15.30
+    LINE_ITEM_QUANTITIES: '1|1|1'
+    LINE_ITEM_TOTAL_PRICES: 18.50|22.90|15.30
+    PAYER_ADDRESS: 145 Bishop Rd, Cronulla NSW 2230
+    PAYER_NAME: Trent Osei
+    SUPPLIER_NAME: Goswell Digital Services
+    TOTAL_AMOUNT: '62.37'
+CASE059:
+  layout: tax_invoice_parties_split
+  fields:
+    BUSINESS_ABN: '22 984 184 182'
+    BUSINESS_ADDRESS: 3 Hardy Ln, South Yarra VIC 3141
+    DOCUMENT_TYPE: INVOICE
+    GST_AMOUNT: '215.32'
+    INVOICE_DATE: 27/09/2023
+    IS_GST_INCLUDED: 'true'
+    LINE_ITEM_DESCRIPTIONS: Business strategy consulting|Marketing campaign management
+    LINE_ITEM_PRICES: 412.75|167.40
+    LINE_ITEM_QUANTITIES: '4|3'
+    LINE_ITEM_TOTAL_PRICES: 1651.00|502.20
+    PAYER_ADDRESS: 88 Chester Ave, Manuka ACT 2603
+    PAYER_NAME: Harriet Nguyen
+    SUPPLIER_NAME: Ravensdale International Business Consulting Partners
+    TOTAL_AMOUNT: '2368.52'
+CASE060:
+  layout: tax_invoice_parties_split
+  fields:
+    BUSINESS_ABN: '40 407 397 842'
+    BUSINESS_ADDRESS: 256 Vale St, Richmond VIC 3121
+    DOCUMENT_TYPE: INVOICE
+    GST_AMOUNT: '3053.99'
+    INVOICE_DATE: 11/11/2024
+    IS_GST_INCLUDED: 'true'
+    LINE_ITEM_DESCRIPTIONS: Cloud infrastructure migration|Cybersecurity assessment|Website
+      design and development|Brand identity design
+    LINE_ITEM_PRICES: 4213.60|2890.15|1450.90|1120.35
+    LINE_ITEM_QUANTITIES: '5|2|1|2'
+    LINE_ITEM_TOTAL_PRICES: 21068.00|5780.30|1450.90|2240.70
+    PAYER_ADDRESS: 401 Carter Blvd, Fremantle WA 6160
+    PAYER_NAME: Desmond Okoye
+    SUPPLIER_NAME: Lonsdale Creative Agency
+    TOTAL_AMOUNT: '33593.89'
+CASE061:
+  layout: tax_invoice_parties_split
+  fields:
+    BUSINESS_ABN: '45 789 014 283'
+    BUSINESS_ADDRESS: 27 Wexford St, Prospect SA 5082
+    DOCUMENT_TYPE: INVOICE
+    GST_AMOUNT: '469.67'
+    INVOICE_DATE: 05/07/2023
+    IS_GST_INCLUDED: 'true'
+    LINE_ITEM_DESCRIPTIONS: Audit services|Tax return preparation|Financial planning
+      services|Due diligence review|Accounting and bookkeeping
+    LINE_ITEM_PRICES: 298.40|512.60|342.70|401.10|138.20
+    LINE_ITEM_QUANTITIES: '3|2|1|4|6'
+    LINE_ITEM_TOTAL_PRICES: 895.20|1025.20|342.70|1604.40|829.20
+    PAYER_ADDRESS: 247 Featherstonehaugh Cres, Battery Point TAS 7004
+    PAYER_NAME: Imogen Castellano
+    SUPPLIER_NAME: Marchbank Chartered Accountants
+    TOTAL_AMOUNT: '5166.37'
+CASE062:
+  layout: tax_invoice_parties_ruled
+  fields:
+    BUSINESS_ABN: '58 623 765 771'
+    BUSINESS_ADDRESS: 63 Grady St, Leederville WA 6007
+    DOCUMENT_TYPE: INVOICE
+    GST_AMOUNT: '131.18'
+    INVOICE_DATE: 16/01/2024
+    IS_GST_INCLUDED: 'true'
+    LINE_ITEM_DESCRIPTIONS: Software development services
+    LINE_ITEM_PRICES: '187.40'
+    LINE_ITEM_QUANTITIES: '7'
+    LINE_ITEM_TOTAL_PRICES: '1311.80'
+    PAYER_ADDRESS: 58 Elder Pl, Newtown NSW 2042
+    PAYER_NAME: Clarissa Whitmore
+    SUPPLIER_NAME: Penhallow IT Consulting
+    TOTAL_AMOUNT: '1442.98'
+CASE063:
+  layout: tax_invoice_parties_ruled
+  fields:
+    BUSINESS_ABN: '77 216 121 903'
+    BUSINESS_ADDRESS: 190 Sackville St, Chatswood NSW 2067
+    DOCUMENT_TYPE: INVOICE
+    GST_AMOUNT: '44.40'
+    INVOICE_DATE: 08/08/2023
+    IS_GST_INCLUDED: 'true'
+    LINE_ITEM_DESCRIPTIONS: Legal document preparation|Employee mediation services
+    LINE_ITEM_PRICES: 245.30|198.70
+    LINE_ITEM_QUANTITIES: '1|1'
+    LINE_ITEM_TOTAL_PRICES: 245.30|198.70
+    PAYER_ADDRESS: 71 Marsh Way, Unley SA 5061
+    PAYER_NAME: Owen Bracewell
+    SUPPLIER_NAME: Yarrow & Partners Lawyers
+    TOTAL_AMOUNT: '488.40'
+CASE064:
+  layout: tax_invoice_parties_ruled
+  fields:
+    BUSINESS_ABN: '80 837 729 406'
+    BUSINESS_ADDRESS: 34 Osmond Rd, St Kilda VIC 3182
+    DOCUMENT_TYPE: INVOICE
+    GST_AMOUNT: '279.52'
+    INVOICE_DATE: 22/04/2023
+    IS_GST_INCLUDED: 'true'
+    LINE_ITEM_DESCRIPTIONS: Business strategy consulting|Risk assessment review|Contract
+      review and drafting
+    LINE_ITEM_PRICES: 389.60|1245.90|256.70
+    LINE_ITEM_QUANTITIES: '2|1|3'
+    LINE_ITEM_TOTAL_PRICES: 779.20|1245.90|770.10
+    PAYER_ADDRESS: 129 Curzon St, Hobart TAS 7000
+    PAYER_NAME: Felicity Marchmont
+    SUPPLIER_NAME: Greater Kirriemuir Business Consulting Partners
+    TOTAL_AMOUNT: '3074.72'
+CASE065:
+  layout: tax_invoice_parties_ruled
+  fields:
+    BUSINESS_ABN: '81 112 096 731'
+    BUSINESS_ADDRESS: 8 Preston Gr, Norwood SA 5067
+    DOCUMENT_TYPE: INVOICE
+    GST_AMOUNT: '889.46'
+    INVOICE_DATE: 30/10/2024
+    IS_GST_INCLUDED: 'true'
+    LINE_ITEM_DESCRIPTIONS: Marketing campaign management|Brand identity design|Website
+      design and development|Corporate training workshop
+    LINE_ITEM_PRICES: 172.40|1350.90|1120.55|1480.20
+    LINE_ITEM_QUANTITIES: '5|1|2|3'
+    LINE_ITEM_TOTAL_PRICES: 862.00|1350.90|2241.10|4440.60
+    PAYER_ADDRESS: 217 Baxter Cl, Parramatta NSW 2150
+    PAYER_NAME: Zachary Ferreira
+    SUPPLIER_NAME: Statewide Brand & Media
+    TOTAL_AMOUNT: '9784.06'
+CASE066:
+  layout: tax_invoice_parties_ruled
+  fields:
+    BUSINESS_ABN: '83 491 418 202'
+    BUSINESS_ADDRESS: 45 Winton St, Subiaco WA 6008
+    DOCUMENT_TYPE: INVOICE
+    GST_AMOUNT: '1961.40'
+    INVOICE_DATE: 19/06/2024
+    IS_GST_INCLUDED: 'true'
+    LINE_ITEM_DESCRIPTIONS: Cloud infrastructure migration|Cybersecurity assessment|Audit
+      services|Annual report preparation|Tax return preparation
+    LINE_ITEM_PRICES: 3120.40|2650.75|312.60|890.30|640.10
+    LINE_ITEM_QUANTITIES: '3|2|4|2|3'
+    LINE_ITEM_TOTAL_PRICES: 9361.20|5301.50|1250.40|1780.60|1920.30
+    PAYER_ADDRESS: 318 Cholmondeley Gr, New Farm QLD 4005
+    PAYER_NAME: Beatrix Longstaffe
+    SUPPLIER_NAME: Ashby Tax & Advisory
+    TOTAL_AMOUNT: '21575.40'
+CASE067:
+  layout: tax_invoice_parties_ruled
+  fields:
+    BUSINESS_ABN: '96 691 256 378'
+    BUSINESS_ADDRESS: 22 Aldous St, Alexandria NSW 2015
+    DOCUMENT_TYPE: INVOICE
+    GST_AMOUNT: '8.45'
+    INVOICE_DATE: 12/12/2023
+    IS_GST_INCLUDED: 'true'
+    LINE_ITEM_DESCRIPTIONS: Contract review and drafting|Legal document preparation
+    LINE_ITEM_PRICES: 45.90|38.60
+    LINE_ITEM_QUANTITIES: '1|1'
+    LINE_ITEM_TOTAL_PRICES: 45.90|38.60
+    PAYER_ADDRESS: 96 Doust Rd, Cronulla NSW 2230
+    PAYER_NAME: Callum Pretorius
+    SUPPLIER_NAME: Bramwell Legal Group
+    TOTAL_AMOUNT: '92.95'
