@@ -39,8 +39,17 @@ BLOCK_CATEGORIES: tuple[str, ...] = (
     "reference",
 )
 
-# The only span-level category this corpus produces. OmniDocBench also defines
-# `equation_ignore`, `equation_inline` and `footnote_mark`, none of which can
+# OmniDocBench's span-level category names, verbatim and in full — listed for
+# the same reason as BLOCK_CATEGORIES, so the shipped README can count coverage
+# against the vocabulary instead of asserting a remembered "1 of 4".
+SPAN_CATEGORIES: tuple[str, ...] = (
+    "text_span",
+    "equation_ignore",
+    "equation_inline",
+    "footnote_mark",
+)
+
+# The only span-level category this corpus produces; the other three cannot
 # occur here.
 SPAN_CATEGORY = "text_span"
 

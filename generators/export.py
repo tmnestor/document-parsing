@@ -170,16 +170,37 @@ def _load_scoring_policy() -> dict:
     return yaml.safe_load(_SCORING_POLICY_PATH.read_text(encoding="utf-8")) or {}
 
 
-def readme_text(date_stamp: str, counts: dict[str, int]) -> str:
+def readme_text(
+    date_stamp: str,
+    counts: dict[str, int],
+    *,
+    tabled: int,
+    multi_tabled: int,
+    categories: dict[str, int],
+    span_categories: dict[str, int],
+) -> str:
     """Build the README that ships with the corpus.
 
     Written for someone with no access to this repo: what the corpus is, what
-    each file is for, and — the part that matters — that the manifest hashes
-    should be verified before scoring.
+    each file is for, how to read the layout annotations, and — the part that
+    matters — that the manifest hashes should be verified before scoring.
+
+    Every number in the body is counted from the export being assembled, for
+    the same reason `_normalisation_sentence` is generated: a figure written
+    out by hand describes whichever vintage the author last looked at, and
+    nothing fails when the corpus moves on. `(14 of 165)` sat in this template
+    across a corpus that had grown to 177 pages. The same rule is why the
+    category coverage claim counts `categories` against `BLOCK_CATEGORIES`
+    rather than saying "3 of 18": a document type that introduces a figure
+    should move that sentence without anyone remembering to.
 
     Args:
         date_stamp: The corpus date, YYYYMMDD.
         counts: Documents per document type.
+        tabled: Pages that ship a `tables/` file.
+        multi_tabled: Pages whose `tables/` file holds more than one table.
+        categories: Block `category_type` -> number of annotations.
+        span_categories: Span `category_type` -> number of spans.
 
     Returns:
         The README body.
@@ -188,9 +209,41 @@ def readme_text(date_stamp: str, counts: dict[str, int]) -> str:
         ExportError: `config/scoring.yml` is missing, or lacks a key the
             normalisation sentence needs.
     """
+    # Lazy for the import-boundary reason at the top of this module: this
+    # submodule's package `__init__` eagerly imports the render engine, and
+    # `docparse-degrade` imports `manifest_record` from here without Faker.
+    from generators.layout_dsl.categories import BLOCK_CATEGORIES, SPAN_CATEGORIES
+
     total = sum(counts.values())
     rows = "\n".join(f"| {doc_type} | {count} |" for doc_type, count in sorted(counts.items()))
     normalisation = _normalisation_sentence(_load_scoring_policy())
+    annotations = sum(categories.values())
+    category_rows = "\n".join(f"| `{name}` | {count} |" for name, count in sorted(categories.items()))
+    span_rows = "\n".join(f"| `{name}` | {count} |" for name, count in sorted(span_categories.items()))
+    # Stated rather than left to be discovered: a consumer who filters on
+    # `ignore` should know whether it ever fires here before concluding their
+    # filter works.
+    ignore_note = (
+        f"`true` marks real ink that no metric should score — {categories.get('abandon', 0)} block(s) here."
+        if "abandon" in categories
+        else "`true` marks real ink that no metric should score. Always `false` in this corpus."
+    )
+    coverage = (
+        f"That is {len(categories)} of OmniDocBench's {len(BLOCK_CATEGORIES)} block categories "
+        f"and {len(span_categories)} of its {len(SPAN_CATEGORIES)} span categories."
+    )
+    # Dropped entirely rather than printed as "(0 of N)": the paragraph exists
+    # to warn a scorer about a file shape, and this corpus has none.
+    multi_table_note = (
+        f"""
+A page with more than one table ({multi_tabled} of {total}) writes every table
+into that one `tables/{{stem}}.html` file, one root `<table>` after another in
+page order. `layout/{{stem}}.json` is authoritative per table in that case —
+each `table` annotation there carries its own `html`.
+"""
+        if multi_tabled
+        else ""
+    )
     return f"""# Document parsing corpus — {date_stamp}
 
 {total} synthetic Australian business documents for benchmarking **full-page
@@ -210,15 +263,90 @@ never recovered by OCR or by hand.
 | `images/` | One pristine page render per case. |
 | `transcripts/` | The canonical transcript for each page, same stem. |
 | `layout/` | OmniDocBench-shaped `layout_dets` per page: boxes, categories, reading order. |
-| `tables/` | Table HTML for TEDS, one file per page with a table (absent otherwise). |
+| `tables/` | Table HTML for TEDS, one file per page with a table ({tabled} of {total}; absent otherwise). |
 | `manifest.jsonl` | One row per case: image, transcript, doc_type, sha256, layout, tables. |
 | `prompt.md` | The prompt these transcripts assume. |
 | `serialisation.yml` | The exact policy that produced these transcripts. |
+{multi_table_note}
+## The layout annotations
 
-A page with more than one table (14 of 165) writes every table into that one
-`tables/{{stem}}.html` file, one root `<table>` after another in page order.
-`layout/{{stem}}.json` is authoritative per table in that case — each `table`
-annotation there carries its own `html`.
+`layout/{{stem}}.json` is a single object, `{{"layout_dets": [...]}}`, holding one
+annotation per block on that page ({annotations} across the corpus). The
+field names are OmniDocBench's, verbatim, so if you already work in that
+vocabulary you need no translation table.
+
+| Field | What it holds |
+| --- | --- |
+| `category_type` | The element class — see the table below. |
+| `poly` | 8 numbers: TL, TR, BR, BL as `(x, y)` pairs. |
+| `anno_id` | The block's unique id. **Not an array index** — see below. |
+| `order` | Reading order: dense, `0`-based, gap-free. |
+| `text` | The block's text, **pre-wrap**. |
+| `html` | Table structure. Present on `table` blocks only. |
+| `ignore` | {ignore_note} |
+| `line_with_spans` | The drawn lines within the block, each with its own `poly` and text. |
+| `attribute` | `doc_type`, `layout_id`, `tier`. |
+
+Five things worth knowing before you consume these.
+
+**`anno_id` is sparse; `order` is not.** `anno_id` is the block's capture
+sequence number, and the walk that produced it also numbers containers, column
+markers and spacers, none of which draw annotatable ink. Gaps are therefore
+normal, and a page's highest `anno_id` is routinely several times its block
+count. Join on `anno_id`, but index and sort on `order`, which counts only
+annotations and runs `0..n-1`. The array ships already sorted by `order`.
+
+**`text` is pre-wrap; `poly` is post-wrap.** Line wrapping is an artifact of font
+size and column width, not of content, so a block's `text` is the unwrapped
+string — byte-identical to its line in the Markdown transcript. Its `poly` is
+where the ink actually landed. A two-line wrapped address is therefore one
+`text_block` carrying the whole string, with two `text_span`s inside
+`line_with_spans` carrying a line each. Both readings are true and neither is
+lossy; pick the one your metric needs.
+
+**Boxes hug ink, not layout regions.** A block's `poly` is the union of its
+spans' boxes, measured from the glyphs drawn, so a right-aligned amount in a wide
+column yields a narrow box rather than a column-width one. A parser that predicts
+region-shaped blocks will score lower IoU against these for a difference that is
+not a reading error. That trade is deliberate — an ink-shaped box is verifiable
+against the page, a region-shaped one only against the layout that produced it —
+but it is worth knowing before you read an IoU number as a layout failure.
+
+**`table` blocks carry `html`, and their `text` is empty.** A table's content
+lives in `html` for TEDS; its `text` is `""` and its `line_with_spans` is empty.
+There are no cell boxes: OmniDocBench has no `table_cell` category and scores
+tables by TEDS rather than by cell geometry, so cell boxes would be data no
+metric here consumes. Cell structure is preserved where it is scored — in the
+HTML.
+
+**Coordinates are pixels in that page's own image, origin top-left.** Page size
+is not constant across the corpus — receipts are cropped to their content height
+— so normalise against the image you were handed, never against a fixed page
+size.
+
+### Categories present
+
+| `category_type` | Annotations |
+| --- | --- |
+{category_rows}
+
+| Span `category_type` | Spans |
+| --- | --- |
+{span_rows}
+
+{coverage}
+
+This corpus is three Australian business document types: it holds no figures, no
+formulas, no captions, no headers or footers, no page numbers, no code and no
+references. Those categories are **absent, not empty** — read their absence as a
+property of the corpus, not as a gap in the annotation.
+
+**There is no composite score here.** OmniDocBench's headline number is
+`((1 − text edit distance) × 100 + TEDS + CDM) / 3`. CDM is a formula metric and
+this corpus has no formulas, so that average is not computable on it. Report the
+per-task numbers instead: a three-way mean missing one of its terms is a
+different statistic wearing the same name, and publishing it invites exactly the
+cross-benchmark comparison it cannot support.
 
 ## Verify before you score
 
@@ -311,6 +439,12 @@ def export_corpus(
 
     manifest: list[dict] = []
     counts: dict[str, int] = {}
+    tabled = 0
+    multi_tabled = 0
+    # Counted from the annotations actually written, so the README's category
+    # tables describe this export rather than a remembered corpus shape.
+    categories: dict[str, int] = {}
+    span_categories: dict[str, int] = {}
     for record in records:
         doc_type = record["doc_type"]
         image_name = record["image_file"]
@@ -359,11 +493,19 @@ def export_corpus(
         )
         row["layout"] = f"layout/{stem}.json"
 
+        for det in annotations["layout_dets"]:
+            categories[det["category_type"]] = categories.get(det["category_type"], 0) + 1
+            for span in det.get("line_with_spans", ()):
+                kind = span["category_type"]
+                span_categories[kind] = span_categories.get(kind, 0) + 1
+
         tables = table_html(record["events"], policy)
         if tables:
             (root / "tables").mkdir(parents=True, exist_ok=True)
             (root / "tables" / f"{stem}.html").write_text("\n".join(tables) + "\n", encoding="utf-8")
             row["tables"] = f"tables/{stem}.html"
+            tabled += 1
+            multi_tabled += len(tables) > 1
 
         manifest.append(row)
         counts[doc_type] = counts.get(doc_type, 0) + 1
@@ -377,7 +519,17 @@ def export_corpus(
     # matched pair with the transcripts beside it.
     shutil.copy2(policy_path, root / "serialisation.yml")
     shutil.copy2(prompt_path, root / "prompt.md")
-    (root / "README.md").write_text(readme_text(date_stamp, counts), encoding="utf-8")
+    (root / "README.md").write_text(
+        readme_text(
+            date_stamp,
+            counts,
+            tabled=tabled,
+            multi_tabled=multi_tabled,
+            categories=categories,
+            span_categories=span_categories,
+        ),
+        encoding="utf-8",
+    )
     return root
 
 
