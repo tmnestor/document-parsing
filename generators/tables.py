@@ -368,7 +368,7 @@ def table_html(events: list[dict], policy: dict) -> list[str]:
     return tables
 
 
-def _check_header_shape(rows: list[tuple[list[str], bool]]) -> None:
+def _check_header_shape(rows: list[tuple[list[Cell], bool]]) -> None:
     """Reject a header-flag shape neither projection can render the same way.
 
     Exactly two shapes are renderable, and both projections agree on them:
@@ -389,10 +389,11 @@ def _check_header_shape(rows: list[tuple[list[str], bool]]) -> None:
     shape fails loudly instead of silently dropping a row.
 
     Args:
-        rows: Each row's cell texts, and whether it is a header row.
+        rows: Each row's cells, and whether it is a header row.
 
     Raises:
-        TableHtmlError: A `header=True` row follows a `header=False` row.
+        TableHtmlError: A `header=True` row follows a `header=False` row, or the
+            header tiers occupy different numbers of columns.
     """
     header_widths = [row_width(cells) for cells, is_header in rows if is_header]
     if len(set(header_widths)) > 1:
