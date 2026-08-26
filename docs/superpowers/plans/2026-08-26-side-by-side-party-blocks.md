@@ -276,7 +276,7 @@ CASE056:
     BUSINESS_ABN: '31 204 887 615'
     BUSINESS_ADDRESS: 88 Kingsford Smith Dr, Hamilton QLD 4007
     DOCUMENT_TYPE: INVOICE
-    GST_AMOUNT: '86.24'
+    GST_AMOUNT: '94.86'
     INVOICE_DATE: 19/02/2024
     IS_GST_INCLUDED: 'true'
     LINE_ITEM_DESCRIPTIONS: Quarterly compliance audit|Document retention review
@@ -286,11 +286,17 @@ CASE056:
     PAYER_ADDRESS: 17 Rosebank Cr, Glenelg SA 5045
     PAYER_NAME: Marguerite Okafor
     SUPPLIER_NAME: Brightwater Advisory Partners
-    TOTAL_AMOUNT: '1034.88'
+    TOTAL_AMOUNT: '1043.50'
 ```
 
-Check it against the rules: `612.40 × 1 = 612.40`, `336.24 × 1 = 336.24`;
-`612.40 + 336.24 = 948.64 = 1034.88 − 86.24`; `round(1034.88 / 11, 2) = 86.24`. ✓
+Check it against the rules: `612.40 x 1 = 612.40`, `336.24 x 1 = 336.24`;
+`612.40 + 336.24 = 948.64 = 1043.50 − 94.86`; `round(1043.50 / 11, 2) = 94.86`. ✓
+
+**Derive in this order** and the three rules cannot disagree: choose the line
+items, sum them to get the ex-GST figure, take `GST = round(sum × 0.1, 2)`,
+then `TOTAL = sum + GST`. Choosing a round-looking `TOTAL` first and working
+backwards is how the first draft of this example ended up satisfying two rules
+out of three.
 
 - [ ] **Step 2: Verify the arithmetic across every new case**
 
