@@ -13,7 +13,11 @@ with the Markdown transcript on which cells hold a date — 34 of 55 bank
 statements, corpus-wide — and disagreed with `config/prompt.md`'s own
 instruction to the model. `carry_group_key_down` and `_join_cell` are imported
 from `serialise.py` rather than re-implemented, the same shared-helper ruling
-already applied to `pair_text`.
+already applied to `pair_text`. A sub-line's dot leader (§ the `cell_sub_line`
+branch below) gets the same treatment: stripped with `strip_decoration_run`
+under `decoration_glyphs`/`decoration_min_run` and joined with
+`cell_sub_line_join`, exactly as `serialise.serialise` does — not a second,
+hardcoded `" "` join with no stripping at all.
 
 TEDS is defined over an HTML tree (Zhong et al., arXiv:1911.10683), so HTML is
 the form that gets emitted. OmniDocBench also carries a `latex` field and marks
@@ -27,9 +31,8 @@ with subsystem B.
 
 import html as html_escape
 
+from generators.decoration import strip_decoration_run
 from generators.serialise import RowWidthError, _join_cell, carry_group_key_down, pad_row
-
-_CELL_JOIN = " "
 
 
 class TableHtmlError(RuntimeError):
@@ -89,15 +92,29 @@ def table_html(events: list[dict], policy: dict) -> list[str]:
             keys.append(str(meta.get("column_key", "")))
             is_header = is_header or bool(meta.get("header"))
         elif kind == "cell_sub_line":
+            # Mirrors serialise.py's cell_sub_line handling exactly (stripped
+            # before the fold, joined with the policy's join string, not a
+            # hardcoded " "): a dot-leader continuation cell — NAB's reference
+            # padded to 40 dots — must state one ground truth in both
+            # projections, not ship the raw leader in HTML while Markdown
+            # strips it.
             key = str(meta.get("column_key", ""))
+            content = strip_decoration_run(
+                str(event["text"] or ""),
+                glyphs=policy["decoration_glyphs"],
+                min_run=policy["decoration_min_run"],
+            )
             if key in keys:
                 position = keys.index(key)
-                row[position] = f"{row[position]}{_CELL_JOIN}{event['text'] or ''}".strip()
+                row[position] = f"{row[position]}{policy['cell_sub_line_join']}{content}"
             elif rows and key in table_columns:
+                # Defensive only: `_draw_sub_lines` (primitives_table.py:870)
+                # always emits cell_sub_line before that row's row_close, so
+                # this branch is unreachable on the real corpus today.
                 position = table_columns.index(key)
                 cells, header = rows[-1]
                 if position < len(cells):
-                    cells[position] = f"{cells[position]}{_CELL_JOIN}{event['text'] or ''}".strip()
+                    cells[position] = f"{cells[position]}{policy['cell_sub_line_join']}{content}"
         elif kind == "row_close":
             if open_row_seq is None:
                 raise _err("a row_close has no matching row_open.", seq=int(event["seq"]))
@@ -131,7 +148,9 @@ def _render(rows: list[tuple[list[str], bool]], columns: list[str], policy: dict
 
     Returns:
         The table's HTML, header rows in `<thead>` and the rest in `<tbody>`.
-        Every row is padded to match the column count.
+        Every row is padded to match the column count. A table that drew no
+        header on the page gets a blank `<thead>` row rather than none, under
+        `headerless_table` — the only enum value this serialiser implements.
 
     Raises:
         TableHtmlError: A row carries more cells than `columns` declares.
@@ -149,7 +168,16 @@ def _render(rows: list[tuple[list[str], bool]], columns: list[str], policy: dict
         except RowWidthError as err:
             raise _err(f"a table row cannot be rendered: {err}", seq=None) from err
 
-    head = "".join(_row(padded_cells(cells), "th") for cells, header in rows if header)
+    if rows and not rows[0][1]:
+        # Headerless on the page (several receipt layouts set `header:
+        # false`): `serialise._render_table` inserts a blank header row under
+        # `headerless_table: empty_header_row` so a pipe table's first line
+        # is never mistaken for column names. Mirrored here so the two
+        # projections keep the same row count and the same structure, not an
+        # HTML table missing a `<thead>` a Markdown reader would see.
+        head = _row(padded_cells([]), "th")
+    else:
+        head = "".join(_row(padded_cells(cells), "th") for cells, header in rows if header)
     body = "".join(_row(padded_cells(cells), "td") for cells, header in rows if not header)
     parts = ["<table>"]
     if head:
