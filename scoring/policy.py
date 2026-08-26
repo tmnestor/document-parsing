@@ -16,9 +16,11 @@ REQUIRED_POLICY_KEYS: tuple[str, ...] = (
     "normalisation.fold_case",
     "reporting.degenerate_length_multiple",
     "reporting.percentiles",
+    "tables.cell_comparison",
 )
 
 _UNICODE_FORMS = ("NFC", "NFD", "NFKC", "NFKD")
+_CELL_COMPARISONS = ("normalised", "strict")
 _BOOL_KEYS = (
     "collapse_whitespace",
     "fold_dashes",
@@ -35,6 +37,7 @@ _EXAMPLES: dict[str, str] = {
     "normalisation.fold_case": "false",
     "reporting.degenerate_length_multiple": "3.0",
     "reporting.percentiles": "[50, 90, 100]",
+    "tables.cell_comparison": "normalised",
 }
 
 
@@ -157,4 +160,14 @@ def _validate_values(policy: dict, *, path: Path, resolved: Path) -> None:
             expected="a non-empty list of integers in 1..100, e.g.\n"
             "              percentiles: [50, 90, 100]",
             recover=f"set 'reporting.percentiles:' in {path} to such a list.",
+        )
+
+    comparison = policy["tables"]["cell_comparison"]
+    if comparison not in _CELL_COMPARISONS:
+        raise diagnostic(
+            f"'cell_comparison' is {comparison!r}, which is not a comparison form this scorer implements.",
+            path=resolved,
+            key="tables.cell_comparison",
+            expected=f"one of {list(_CELL_COMPARISONS)}, e.g.\n              cell_comparison: normalised",
+            recover=f"set 'tables.cell_comparison:' in {path} to one of those forms.",
         )

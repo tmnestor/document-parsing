@@ -46,3 +46,15 @@ reporting:
   # above, so one runaway page can dominate a mean; 100 is the worst case, which
   # a mean hides in the other direction.
   percentiles: [50, 90, 100]
+
+tables:
+  # Which text form cell equality uses, for the cell-aligned table metric.
+  #
+  # `normalised` runs each cell through the normalisation section above before
+  # comparing, so a curly quote or an en dash inside a cell is not scored as a
+  # placement error -- placement is what this metric measures, and typography is
+  # already forgiven by the normalised edit distance. `strict` compares raw cell
+  # text, scoring typography and placement together.
+  #
+  # Allowed: normalised | strict.
+  cell_comparison: normalised
