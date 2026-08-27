@@ -1,6 +1,6 @@
-# Scoring. A THIRD environment, alongside docparse and docparse-degrade, and for
-# the same reason they are separate: its dependencies are incompatible with
-# keeping `docparse` small.
+# Scoring. A SECOND environment, alongside docparse, and for the same reason it
+# is separate: its dependencies are incompatible with keeping `docparse` small.
+# (Degradation used to need a third; it now runs in `docparse` itself.)
 #
 # `docparse` is five pure-Python packages by design and must never grow. This
 # environment adds an edit-distance library, which the generator has no use for.
