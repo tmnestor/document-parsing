@@ -35,10 +35,10 @@ from generators.tables import table_html
 
 # `generators.layout` is imported inside `export_corpus`, not here: it reaches
 # `generators.layout_dsl`, whose package `__init__` eagerly imports the render
-# engine and, through it, `content_engine` (Faker). `docparse-degrade` imports
-# this module for `manifest_record` alone, in an environment that deliberately
-# does not have Faker — a module-level import here would break that boundary
-# for a function `degrade` never calls.
+# engine and, through it, `content_engine` (Faker). `generators.degradation`
+# imports this module for `manifest_record` alone, and does not need the
+# render engine to do it — a module-level import here would drag it in for a
+# function `degrade` never calls.
 
 _CHUNK = 1024 * 1024
 _SCORING_POLICY_PATH = Path("config/scoring.yml")
@@ -224,7 +224,7 @@ def readme_text(
     """
     # Lazy for the import-boundary reason at the top of this module: this
     # submodule's package `__init__` eagerly imports the render engine, and
-    # `docparse-degrade` imports `manifest_record` from here without Faker.
+    # `generators.degradation` imports `manifest_record` from here without it.
     from generators.layout_dsl.categories import BLOCK_CATEGORIES, SPAN_CATEGORIES
 
     total = sum(counts.values())

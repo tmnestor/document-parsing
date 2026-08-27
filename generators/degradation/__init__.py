@@ -18,9 +18,9 @@ painting one across an already skewed page reads as a defect in the file rather
 than in the document. Blur, sensor noise and compression run last, because they
 belong to the sensor and the file.
 
-This package is deliberately absent from the `docparse` environment, which stays
-free of numpy and opencv so that the runner tests can import `runners/` where no
-parser is installed. See `environment-degrade.yml`.
+This package runs in the same `docparse` environment as everything else — see
+`environment.yml`, whose comments explain why `augraphy` is installed
+separately by `build_corpus.sh` rather than listed there directly.
 """
 
 import hashlib
@@ -33,10 +33,10 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
 
 # numpy, opencv and augraphy are imported inside `degrade_page`, not here, and
 # the same rule `runners/common.py` follows for parser imports applies for the
-# same reason: `config/degradation.yml` must be loadable — and therefore
-# validatable in CI — from an environment that has none of them. Importing them
-# at module scope would make `from generators.degradation import load_tiers`
-# fail in `docparse`, which is where the config tests run.
+# same reason: `config/degradation.yml` must stay loadable — and therefore
+# validatable in CI — without paying for those imports (or requiring augraphy,
+# which `environment.yml` deliberately does not list) on every invocation that
+# does not degrade anything.
 
 __all__ = [
     "Tier",

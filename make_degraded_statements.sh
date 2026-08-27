@@ -9,12 +9,14 @@
 #
 # 55 pages x 6 tiers = 330 degraded pages, about 300 MB of JPEG.
 #
-# Runs in an environment with augraphy, NOT in docparse. On this machine the
+# Runs in an environment with augraphy installed. On this machine the
 # predecessor repo's `synthetic` env already carries the exact pins; otherwise
-# create the one this repo declares:
+# create this repo's `docparse` env and install augraphy the way
+# build_corpus.sh does:
 #
-#     conda env create -f environment-degrade.yml
-#     pip uninstall -y opencv-python && pip install --no-deps augraphy==8.2.6
+#     conda env create -f environment.yml
+#     conda run -n docparse pip install --no-deps augraphy==8.2.6
+#     conda run -n docparse pip uninstall -y opencv-python  # if it was pulled in
 
 set -uo pipefail
 
@@ -29,7 +31,8 @@ fail() { echo "!! $*" >&2; exit 1; }
 
 conda run -n "$ENV_NAME" python -c "import augraphy, cv2, numpy" 2>/dev/null ||
     fail "environment '$ENV_NAME' cannot import augraphy/cv2/numpy.
-   Set ENV_NAME=, or create it:  conda env create -f environment-degrade.yml"
+   Set ENV_NAME=, or create docparse (conda env create -f environment.yml) and
+   install augraphy into it: pip install --no-deps augraphy==8.2.6"
 
 # The clean corpus must be the one the 31B was scored on, or the degraded set
 # measures degradation plus a corpus change.

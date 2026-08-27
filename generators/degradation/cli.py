@@ -1,7 +1,9 @@
 """Turn an exported clean corpus into one degraded corpus per tier.
 
-Runs in `docparse-degrade`, not `docparse`: it imports numpy, opencv and
-augraphy, which `docparse` deliberately does not have.
+Runs in `docparse`, the one environment. It imports numpy, opencv and
+augraphy; the first two are pinned in `environment.yml`, and `build_corpus.sh`
+installs augraphy itself, with `--no-deps`, and verifies the result — see
+`generators/degradation/augment.py` for why a plain install is unsafe.
 
 **It consumes an exported corpus and produces exported corpora.** The output of
 each tier is a complete `parsing_*/` directory — images, transcripts, layout

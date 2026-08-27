@@ -32,12 +32,14 @@ from PIL import Image, ImageEnhance, ImageFilter
 # under the same seed, and the manifest hashes then disagree with every
 # prediction already scored against them.
 #
-# Measured 2026-08-22: installing environment-degrade.yml as written leaves BOTH
-# opencv-python-headless 4.13.0.92 and opencv-python 5.0.0.93 present, because
-# augraphy declares the GUI build as a hard requirement and pip honours it. `cv2`
-# then resolves to 5.0.0.93, and 2 of 9 degraded images came out different. The
-# environment file documents the uninstall that fixes it; this check is here
-# because a documented step is one that can be skipped.
+# Measured 2026-08-22: installing augraphy plainly (with its declared
+# dependencies) leaves BOTH opencv-python-headless 4.13.0.92 and opencv-python
+# 5.0.0.93 present, because augraphy declares the GUI build as a hard
+# requirement and pip honours it. `cv2` then resolves to 5.0.0.93, and 2 of 9
+# degraded images came out different. `build_corpus.sh` installs augraphy with
+# `--no-deps` and verifies the result instead of just documenting the uninstall
+# that fixes it; this check is here because a documented step is one that can
+# be skipped.
 _PINNED_CV2 = "4.13.0"
 
 
@@ -62,8 +64,9 @@ def check_opencv() -> None:
         "  Where:    the active conda environment; check with\n"
         "              pip list | grep -i opencv\n"
         "  Expected: ONLY opencv-python-headless==4.13.0.92. augraphy declares the GUI "
-        "build opencv-python as a hard requirement, so a plain install of "
-        "environment-degrade.yml leaves both present and the GUI build wins.\n"
+        "build opencv-python as a hard requirement, so a plain `pip install augraphy` "
+        "leaves both present and the GUI build wins — which is why build_corpus.sh "
+        "installs it with --no-deps instead.\n"
         "  Recover:  pip uninstall -y opencv-python && pip install --no-deps "
         "augraphy==8.2.6\n"
         "            then re-check that pip list shows only the headless build."

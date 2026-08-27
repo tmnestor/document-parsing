@@ -33,14 +33,16 @@ except ImportError as err:  # pragma: no cover - environment failure, not logic
     raise ImportError(
         "Augraphy is not installed.\n"
         f"  What:     image degradation needs augraphy, which failed to import: {err}.\n"
-        "  Where:    environment-degrade.yml -> dependencies.pip\n"
+        "  Where:    build_corpus.sh installs it into `docparse`; environment.yml's "
+        "comments explain why it is not listed there directly.\n"
         "  Expected: augraphy==8.2.6 installed WITHOUT its declared dependencies, since "
         "it requires `opencv-python` (the full GUI build) which would displace the pinned "
-        "opencv-python-headless. numpy must also be <= 2.4, the ceiling numba imposes.\n"
-        "  Recover:  conda env create -f environment-degrade.yml, then "
-        "`pip uninstall -y opencv-python && pip install --no-deps augraphy==8.2.6` if the "
-        "full opencv was pulled in. This package is deliberately absent from `docparse`, "
-        "which stays free of numpy and opencv."
+        "opencv-python-headless. numpy must also stay at the version environment.yml pins, "
+        "the ceiling numba imposes.\n"
+        "  Recover:  run ./build_corpus.sh, which installs and verifies augraphy; or by "
+        "hand: `conda run -n docparse pip install --no-deps augraphy==8.2.6`, then "
+        "`conda run -n docparse pip uninstall -y opencv-python` if the full opencv build "
+        "was pulled in alongside it."
     ) from err
 
 # YAML name -> Augraphy class. Every geometric augmentation is deliberately
