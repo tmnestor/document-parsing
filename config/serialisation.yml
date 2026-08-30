@@ -72,13 +72,19 @@ emphasis: none
 # the group's first transaction instead and was scored as dropping a row on
 # 100% of those documents, the count matching the date-only rows exactly.
 #
-# The issuing bank resolves it the same way, which is the stronger argument.
-# CBA's transaction history prints each day's date once as a band on screen and
-# then repeats that date on every row beneath it in its own CSV export, having
-# also collapsed its Debit and Credit columns into one signed amount. The bank
-# that drew the page treats the date as belonging to each transaction rather
-# than to a row of its own — so carrying it down records what the document
-# MEANS, not merely what models can manage. (Observed 2026-08-31.)
+# Note what is NOT the reason any more. On the page the band is a cell spanning
+# the table's full width, and since 2026-08-27 the format can say exactly that:
+# `colspan` was added for spanning header tiers. "The format cannot represent a
+# band" was a pipe-table constraint and it is gone.
+#
+# The reason that remains is that one page feature must have exactly ONE ground
+# truth. `carry_group_key` is GLOBAL policy, so a spanning band row would not be
+# an alternative for banded statements — it would be a second, contradictory
+# answer to a construct this key already answers, on every table at once. See
+# docs/superpowers/specs/2026-08-27-merged-cells-and-spanning-headers-design.md
+# §2 for why `rowspan` deliberately does not mean a grouped date, and §9, which
+# places revisiting this out of scope: it changes a shipped convention and
+# belongs in its own spec.
 #
 # Set 'none' to record the band as its own row again.
 carry_group_key: down
