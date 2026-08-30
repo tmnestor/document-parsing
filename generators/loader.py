@@ -151,7 +151,25 @@ def load_layout_registry(path: Path) -> dict:
 
 # Subdirectories of the dataset root, derived rather than configured separately
 # so a new vintage is one edit and everything moves together.
-_DERIVED_FROM_ROOT = {"output_dir": "output", "derived_dir": "derived", "exports_dir": "exports"}
+#
+# The export is deliberately NOT here. `generate` and `serialise` write working
+# data that belongs to this repository's run; the export is a hand-off aimed at
+# the scoring repository, and its destination is named by whoever asks for it
+# (`export --target`). Deriving an `exports_dir` gave that one question two
+# owners -- and since build_corpus.sh always passed `--target`, the configured
+# answer was never the one used. A YAML key nobody reads is a lie in a file
+# whose whole job is to state what a run does.
+_DERIVED_FROM_ROOT = {"output_dir": "output", "derived_dir": "derived"}
+
+# Keys that once existed and would now be silently ignored. Failing on them is
+# the difference between "this does nothing" and "this does something you
+# cannot see".
+_RETIRED_KEYS = {
+    "exports_dir": (
+        "the export's destination is named per run by 'export --target' "
+        "(and 'degrade --out'), so a configured directory here would never be read"
+    ),
+}
 
 
 def resolve_data_dir(value: str, config_path: Path) -> Path:
@@ -248,13 +266,29 @@ def load_generation_config(path: Path) -> dict:
             )
             raise ValueError(msg)
 
+    for key, why in _RETIRED_KEYS.items():
+        if key in data:
+            msg = (
+                "Generation config declares a key that is no longer read.\n"
+                f"  What:     '{key}' has been retired — {why}.\n"
+                f"  Where:    {path.resolve()} -> {key}\n"
+                "  Expected: the key absent, e.g.\n"
+                "              dataset_root: ../document-parsing-data/synthetic_data_2026-08-25\n"
+                "              ground_truth_dir: ground_truth\n"
+                f"  Recover:  delete the '{key}:' line from "
+                "config/generation_config.yml and pass the destination on the "
+                "command line instead:\n"
+                "              python -m generators.pipeline export --target <dir>"
+            )
+            raise ValueError(msg)
+
     # Resolved here, once, so every command sees the same absolute paths and no
     # caller has to remember to expand them. `ground_truth_dir` is deliberately
     # NOT resolved: it is tracked input living beside the config, not output.
     #
-    # The three writable directories hang off one dated root, so starting a new
-    # vintage is a single edit and images, transcripts and the export cannot end
-    # up describing different runs. An explicitly configured `output_dir` or
+    # Both writable directories hang off one dated root, so starting a new
+    # vintage is a single edit and images and transcripts cannot end up
+    # describing different runs. An explicitly configured `output_dir` or
     # `derived_dir` still wins, for the case where one of them must live
     # somewhere else entirely.
     root = resolve_data_dir(data["dataset_root"], path)

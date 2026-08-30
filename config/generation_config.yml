@@ -28,8 +28,9 @@
 #   corpus, invalidating every prediction already scored against it. A dated root
 #   keeps old vintages intact and makes "which corpus was that?" answerable.
 #
-# Bump the date to start a new vintage; output/, derived/ and exports/ all move
-# with it, so they cannot end up describing different runs.
+# Bump the date to start a new vintage; output/ and derived/ both move with it,
+# so they cannot end up describing different runs. The export does not hang off
+# this root at all -- it is a hand-off, and `export --target` names it per run.
 #
 # Accepts `~` and `${VAR}`, so a shared machine or a CI job can point at a store
 # without editing this tracked file:

@@ -138,8 +138,13 @@ against it. `build_corpus.sh` itself refuses to write into an existing
 can point at a store without editing tracked config. A relative path resolves
 against the **repository root**, not the working directory, so it means the
 same thing however the command was invoked; absolute paths are taken as
-given, and `--output` / `--derived` / `--target` override for a single run of
-the underlying `python -m generators.pipeline` commands.
+given, and `--output` / `--derived` override for a single run of the underlying
+`python -m generators.pipeline` commands.
+
+`dataset_root` covers the working data — images and transcripts. It does not
+cover the export: `export --target` is required and has no configured default,
+because the deliverable is a hand-off to the scoring repository and its
+destination belongs to whoever asks for it. `build_corpus.sh` passes it.
 
 Pinned by `tests/test_data_location.py`, which fails if the shipped default
 ever resolves back inside the working tree.

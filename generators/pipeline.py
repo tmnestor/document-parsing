@@ -431,6 +431,17 @@ def preview(
 
 @app.command()
 def export(
+    # Required, and therefore first in the signature. `--output` and `--derived`
+    # are SOURCES for this command; only `--target` says where the deliverable
+    # lands. When this had a configured default, passing just the two source
+    # flags looked sandboxed and wasn't.
+    target: Annotated[
+        Path,
+        typer.Option(
+            "--target",
+            help="Directory to create the export inside. Required — there is no configured default.",
+        ),
+    ],
     config: Annotated[Path, typer.Option(help="Path to generation_config.yml")] = _DEFAULT_CONFIG,
     policy: Annotated[Path, typer.Option("--policy", help="Path to serialisation.yml")] = _DEFAULT_POLICY,
     prompt: Annotated[Path, typer.Option("--prompt", help="Path to prompt.md")] = _DEFAULT_PROMPT,
@@ -439,13 +450,6 @@ def export(
     ] = None,
     output: Annotated[
         Path | None, typer.Option("--output", help="Override the configured output directory.")
-    ] = None,
-    target: Annotated[
-        Path | None,
-        typer.Option(
-            "--target",
-            help="Directory to create the export inside. Defaults beside the configured data.",
-        ),
     ] = None,
     date: Annotated[
         str | None, typer.Option("--date", help="Corpus date stamp, YYYYMMDD. Defaults to today.")
@@ -464,11 +468,6 @@ def export(
     cfg = load_generation_config(config)
     derived_dir = derived if derived is not None else Path(cfg["derived_dir"])
     output_dir = output if output is not None else Path(cfg["output_dir"])
-    # The export is generated data too, so it lands with the rest of it rather
-    # than in whatever directory the command happened to be run from -- which
-    # was the working tree, every time, since these commands are run from the
-    # repository root.
-    export_root = target if target is not None else Path(cfg["exports_dir"])
     records = _load_event_records(derived_dir)
     date_stamp = date if date is not None else datetime.now().strftime("%Y%m%d")
 
@@ -479,7 +478,7 @@ def export(
             transcripts_dir=derived_dir / "transcripts",
             policy_path=policy,
             prompt_path=prompt,
-            target=export_root,
+            target=target,
             date_stamp=date_stamp,
         )
     except ExportError as exc:

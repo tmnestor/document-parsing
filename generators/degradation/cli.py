@@ -77,7 +77,7 @@ def resolve_run(
     *,
     family: list[str] | None,
     doc_type: list[str] | None,
-    out: Path | None,
+    out: Path,
 ) -> RunPlan:
     """Fold flags over configuration to decide what this run covers.
 
@@ -90,27 +90,37 @@ def resolve_run(
             where generated data lives.
         family: `--family` values, or None to use the configured families.
         doc_type: `--type` values, or None to use the configured types.
-        out: `--out`, or None to default beside the generated data.
+        out: `--out`. Required — the destination of a deliverable has one
+            owner, and it is the caller.
 
     Returns:
         The resolved plan.
     """
     selection = load_corpus_selection(config_path)
-    generation = load_generation_config(generation_config_path)
+    # Loaded for its validation, not for a path: a run that is about to write a
+    # corpus should fail on a malformed generation config here rather than
+    # midway through the degrade loop.
+    load_generation_config(generation_config_path)
     return RunPlan(
         families=tuple(family) if family else selection.families,
         doc_types=tuple(doc_type) if doc_type else selection.document_types,
-        out=out if out is not None else Path(generation["exports_dir"]),
+        out=out,
     )
 
 
 @app.command()
 def degrade(
     corpus: Annotated[Path, typer.Option("--corpus", help="An exported clean corpus.")],
+    # Required, like `export --target`, and for the same reason: the tiers are a
+    # deliverable, so the caller names where they land. Config still decides
+    # *what* is degraded -- families, types, tiers -- just not where it goes.
     out: Annotated[
-        Path | None,
-        typer.Option("--out", help="Where the degraded corpora are written. Defaults beside the data."),
-    ] = None,
+        Path,
+        typer.Option(
+            "--out",
+            help="Where the degraded corpora are written. Required — there is no configured default.",
+        ),
+    ],
     config: Annotated[Path, typer.Option("--config", help="Tier declarations.")] = Path(
         "config/degradation.yml"
     ),
