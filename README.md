@@ -73,8 +73,9 @@ file cannot go stale the way an earlier version of it did.
 
 This repository generates a corpus and emits ground truth. It runs no
 extractor and no parser. Parser runners and analysis live in a **separate
-repository**; the interface between them is the **exported corpus directory**
-above, not shared code — which is why nothing here depends on a parser.
+repository** ([bank-statement-error-analysis](https://github.com/tmnestor/bank-statement-error-analysis));
+the interface between them is the **exported corpus directory** above, not
+shared code — which is why nothing here depends on a parser.
 
 Text scoring is the one exception and lives here, in `scoring/`. It reads an
 exported corpus directory and never imports `generators/`, so the interface is
@@ -234,10 +235,17 @@ likeliest contribution error and catching it needs no render.
 
 ## Related
 
-Parser runners and the extraction benchmark that *consumes*
-`extraction_<stamp>/ground_truth.{jsonl,csv}` live in a separate repository.
-The interface between them is the **exported corpus directory** above, not
-shared code.
+Parser runners live in
+[bank-statement-error-analysis](https://github.com/tmnestor/bank-statement-error-analysis)
+— `runners/run_docling.py`, `run_mineru.py`, `run_vlm.py`, each in its own
+environment — together with the transcription analysis built on their output.
+The interface between the two repositories is the **exported corpus directory**
+above, not shared code: it consumes a `parsing_<stamp>/` export and verifies the
+manifest's sha256 per image before scoring anything.
+
+`extraction_<stamp>/ground_truth.{jsonl,csv}` currently has **no consumer**. It
+is emitted so that an information-extraction benchmark does not have to
+reimplement the converter from `ground_truth/*.yml`; nothing reads it yet.
 
 **Text scoring now lives here**, in `scoring/`, for an internal model
 comparison — one operator, and a second repository would have been
