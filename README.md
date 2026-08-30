@@ -72,10 +72,14 @@ file cannot go stale the way an earlier version of it did.
 ## What this deliberately does not do
 
 This repository generates a corpus and emits ground truth. It runs no
-extractor, no parser and no scorer. Parser runners, scoring and analysis live
-in a **separate repository**; the interface between them is the **exported
-corpus directory** above, not shared code — which is why nothing here depends
-on a parser.
+extractor and no parser. Parser runners and analysis live in a **separate
+repository**; the interface between them is the **exported corpus directory**
+above, not shared code — which is why nothing here depends on a parser.
+
+Text scoring is the one exception and lives here, in `scoring/`. It reads an
+exported corpus directory and never imports `generators/`, so the interface is
+still the directory even inside one repository — see [Related](#related) for
+why it was brought in and what enforces that boundary.
 
 Also out of scope: layout/region detection and table-structure recognition as
 a *modelling target* (the corpus ships that ground truth, it does not score
@@ -143,8 +147,9 @@ given, and `--output` / `--derived` override for a single run of the underlying
 
 `dataset_root` covers the working data — images and transcripts. It does not
 cover the export: `export --target` is required and has no configured default,
-because the deliverable is a hand-off to the scoring repository and its
-destination belongs to whoever asks for it. `build_corpus.sh` passes it.
+because the deliverable is a hand-off — to `scoring/` here, and to the parser
+runners elsewhere — and its destination belongs to whoever asks for it.
+`build_corpus.sh` passes it.
 
 Pinned by `tests/test_data_location.py`, which fails if the shipped default
 ever resolves back inside the working tree.
