@@ -42,7 +42,7 @@
 # directory, so it means the same thing however the command was invoked;
 # absolute paths are taken as given. `--output`, `--derived` and `--target`
 # override for a single run.
-dataset_root: ../document-parsing-data/synthetic_data_2026-08-25
+dataset_root: ../document-parsing-data/synthetic_data_2026-08-31
 
 # Tracked INPUT, read from beside this config and never resolved outward.
 ground_truth_dir: ground_truth
