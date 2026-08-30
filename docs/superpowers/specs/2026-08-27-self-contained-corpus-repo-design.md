@@ -32,6 +32,23 @@ working front door, an IE projection, and an install a stranger can complete.
 | `regenerate_bank_statements.sh` | **Delete.** | It drives the dead `evaluation.*` package, renders only bank statements while exporting all 189 pages, and is superseded. |
 | `make_degraded_statements.sh` | **Keep.** | Already calls the current module; a useful narrow entry for re-degrading without regenerating. |
 
+> **Correction (2026-08-31).** The IE row's reason contains a clause that was
+> already false when this was written: "scoring lives in a separate repository
+> by deliberate design". Scoring had moved *into* this repository two days
+> earlier — `6df9759` and `ebedfcb`, both 2026-08-25 — under the reversal
+> recorded in `2026-08-25-degradation-matrix-and-scoring-design.md` §3. Text
+> scoring lives here, in `scoring/`, with its own `docparse-score` environment.
+>
+> The decision itself stands unchanged: emit IE ground truth, run no extractor.
+> Only its stated reason was wrong, and the narrower true reason still supports
+> it — this repository generates a corpus and scores transcription, so a full IE
+> benchmark harness remains out of scope.
+>
+> The "Environments: **One.**" row is **not** affected: it concerns collapsing
+> `docparse` and `docparse-degrade` into one *generator* environment (see §4),
+> which `2329c2c` then did. `docparse-score` is a separate concern and no part
+> of that row's claim.
+
 ## 3. What a run produces
 
 ```

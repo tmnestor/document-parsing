@@ -1044,6 +1044,19 @@ Structure it for someone who has just cloned and knows nothing:
 
 Do not restate a page count as a literal anywhere.
 
+> **Correction (2026-08-31).** Item 5 above instructs the README to say "no
+> scorer; scoring lives in a separate repository". That was already false when
+> written — `scoring/` landed on 2026-08-25 (`6df9759`, `ebedfcb`), under the
+> reversal in `2026-08-25-degradation-matrix-and-scoring-design.md` §3 — and the
+> instruction was followed, so the README carried the untrue claim until
+> `53daaea` corrected it on 2026-08-31.
+>
+> What item 5 should have said: this repository runs no extractor and no parser;
+> parser runners and analysis live in `tmnestor/bank-statement-error-analysis`;
+> **text scoring lives here**, in `scoring/`, which never imports `generators/`
+> so the interface is still the exported directory. The rest of item 5 — the
+> out-of-scope list — stands as written.
+
 - [ ] **Step 4: Update CLAUDE.md's scope wording**
 
 In the "What this is" section, the out-of-scope list currently ends "...multi-page documents, and information extraction." Change that clause to record the boundary chosen in the spec:
