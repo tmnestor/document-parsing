@@ -72,6 +72,14 @@ emphasis: none
 # the group's first transaction instead and was scored as dropping a row on
 # 100% of those documents, the count matching the date-only rows exactly.
 #
+# The issuing bank resolves it the same way, which is the stronger argument.
+# CBA's transaction history prints each day's date once as a band on screen and
+# then repeats that date on every row beneath it in its own CSV export, having
+# also collapsed its Debit and Credit columns into one signed amount. The bank
+# that drew the page treats the date as belonging to each transaction rather
+# than to a row of its own — so carrying it down records what the document
+# MEANS, not merely what models can manage. (Observed 2026-08-31.)
+#
 # Set 'none' to record the band as its own row again.
 carry_group_key: down
 
