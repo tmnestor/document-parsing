@@ -5,6 +5,7 @@ positions resolve against the current region, so a table nested inside a
 container positions correctly without knowing it is nested.
 """
 
+import datetime
 from decimal import Decimal
 
 from generators.common import (
@@ -26,6 +27,44 @@ from generators.layout_dsl.providers import get_provider
 from generators.transcript import DrawSurface
 
 _ABSENT = "NOT_FOUND"
+
+# Public: schema.py imports this to validate `group_date_format`.
+GROUP_DATE_FORMATS = ("numeric", "long_au")
+
+# Spelled out rather than left to `strftime("%a %d %b %Y")`, whose %a and %b are
+# LOCALE-DEPENDENT: under LC_TIME=de_DE the same date renders "Okt", moving
+# pixels on a machine that differs only in its environment. Byte-identical
+# rendering is a contract (test_the_same_input_renders_byte_identical_images),
+# and this is the same reasoning that leaves the corpus with no system-font
+# fallback — an implicit environment lookup is exactly what must not decide ink.
+_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def format_group_date(date: str, style: str) -> str:
+    """Render a date band's text in the style the layout asks for.
+
+    Args:
+        date: The row's `date`, `DD/MM/YYYY` as the ground truth authors it.
+        style: `numeric` to draw it unchanged, or `long_au` for the long
+            Australian form a real CBA statement heads each day with, e.g.
+            `Sat 07 Oct 2023`.
+
+    Returns:
+        The text to draw. A value that is not a `DD/MM/YYYY` date comes back
+        unchanged rather than raising — a band's text comes from ground truth
+        `validate` has already checked, and a half-drawn page is the wrong place
+        to discover otherwise.
+    """
+    if style == "numeric":
+        return date
+    try:
+        day, month, year = (int(part) for part in date.split("/"))
+        weekday = datetime.date(year, month, day).weekday()
+    except (TypeError, ValueError):
+        return date
+    return f"{_WEEKDAYS[weekday]} {day:02d} {_MONTHS[month - 1]} {year}"
+
 
 # Public: schema.py imports this as the single source of truth for validating
 # a table column's `align:` key. Deliberately narrower than
@@ -338,6 +377,16 @@ def draw_table(block: dict, ctx: RenderContext, y: int) -> int:
             block_key="group_gap",
         )
     )
+    group_date_format = str(
+        resolve_param(
+            block,
+            ctx.layout,
+            "table_group_date_format",
+            layout_id=ctx.layout_id,
+            layout_path=ctx.layout_path,
+            block_key="group_date_format",
+        )
+    )
     synthetic_after_header = block.get("synthetic_row_placement") == "after_first_group_header"
     label_inset_y = block.get("label_inset_y")
     if label_inset_y is not None:
@@ -520,8 +569,10 @@ def draw_table(block: dict, ctx: RenderContext, y: int) -> int:
                 )
             # `dedicated_row` grouping puts the date on a row of its own, so it
             # is a real table row carrying exactly one cell. Emitting it as such
-            # keeps the pipe table's row count matching the page's.
-            group_date = str(row.get("date", ""))
+            # keeps the CAPTURED row count matching the page's. Whether the band
+            # survives into the transcript is `carry_group_key`'s decision, not
+            # this primitive's — capture records ink, policy decides what stays.
+            group_date = format_group_date(str(row.get("date", "")), group_date_format)
             if ctx.transcript is not None:
                 ctx.transcript.emit("row_open", None, group_header=True)
                 ctx.transcript.emit(

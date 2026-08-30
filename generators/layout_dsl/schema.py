@@ -16,7 +16,11 @@ from generators.layout_dsl.field_providers import (
     field_provider_names,
     field_provider_param_keys,
 )
-from generators.layout_dsl.primitives_table import CELL_LINE_SPACINGS, COLUMN_ALIGNMENTS
+from generators.layout_dsl.primitives_table import (
+    CELL_LINE_SPACINGS,
+    COLUMN_ALIGNMENTS,
+    GROUP_DATE_FORMATS,
+)
 from generators.layout_dsl.primitives_text import ALIGNMENTS, PAIR_CURRENCIES, PAIR_VALUE_ALIGNS
 from generators.layout_dsl.providers import provider_names, provider_param_keys
 
@@ -118,6 +122,7 @@ PRIMITIVES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "row_inset_y",
             "cell_line_spacing",
             "group_gap",
+            "group_date_format",
             "synthetic_row_placement",
             "header_groups",
             "row_span_key",
@@ -592,6 +597,27 @@ def _validate_table(block: dict, *, known_fields: set[str], layout_path: str, ke
             key_path=f"{key_path}.group_gap",
             expected="group_gap only alongside grouping: dedicated_row.",
             recover="remove group_gap, or set grouping: dedicated_row.",
+        )
+
+    if grouping != "dedicated_row" and "group_date_format" in block:
+        raise _err(
+            "group_date_format is set but grouping is not 'dedicated_row', which never reads "
+            "it — only dedicated_row draws a date band whose text there is a format for.",
+            layout_path=layout_path,
+            key_path=f"{key_path}.group_date_format",
+            expected="group_date_format only alongside grouping: dedicated_row.",
+            recover="remove group_date_format, or set grouping: dedicated_row.",
+        )
+
+    if "group_date_format" in block and block["group_date_format"] not in GROUP_DATE_FORMATS:
+        raise _err(
+            f"group_date_format is {block['group_date_format']!r}, which is not a format the "
+            f"table primitive draws. Allowed: {list(GROUP_DATE_FORMATS)}.",
+            layout_path=layout_path,
+            key_path=f"{key_path}.group_date_format",
+            expected="one of those values, e.g.\n              group_date_format: long_au",
+            recover="set group_date_format to 'numeric' (DD/MM/YYYY as authored) or "
+            "'long_au' (e.g. 'Sat 07 Oct 2023').",
         )
 
     if "synthetic_row_placement" in block:
@@ -1164,6 +1190,25 @@ def validate_layout(layout: dict, *, layout_id: str, layout_path: str, known_fie
             recover=f"set {layout_id}.defaults.family to one of {sorted(FONT_FAMILIES)}, "
             "or vendor the new face in fonts/ and register it in FONT_FAMILIES in "
             "generators/common.py.",
+        )
+
+    # Same reasoning for the date band's format: an unknown value here would
+    # otherwise reach format_group_date, which returns the date unchanged rather
+    # than raising, so a typo would silently draw the wrong style instead of
+    # failing at startup.
+    default_group_date_format = layout["defaults"]["table_group_date_format"]
+    if default_group_date_format not in GROUP_DATE_FORMATS:
+        raise _err(
+            f"layout '{layout_id}' declares an unknown defaults.table_group_date_format "
+            f"({default_group_date_format!r}); the table primitive draws no such "
+            "group_date_format.",
+            layout_path=layout_path,
+            key_path=f"{layout_id}.defaults.table_group_date_format",
+            expected=f"one of {list(GROUP_DATE_FORMATS)}, e.g.\n"
+            "              defaults:\n"
+            "                table_group_date_format: numeric",
+            recover=f"set {layout_id}.defaults.table_group_date_format to 'numeric' "
+            "(DD/MM/YYYY as authored) or 'long_au' (e.g. 'Sat 07 Oct 2023').",
         )
 
     # line_advance replaces the old int(size * 1.4) ratio, which varied by

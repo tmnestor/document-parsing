@@ -36,6 +36,7 @@ PARAMETER_DEFAULTS: frozenset[str] = frozenset(
         "table_row_inset_y",
         "table_cell_line_spacing",
         "table_group_gap",
+        "table_group_date_format",
         "table_fill_inset",
         "table_dividers",
         "table_offset_y",

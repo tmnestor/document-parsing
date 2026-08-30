@@ -101,6 +101,9 @@ _invoice_defaults_values: &invoice_defaults_values
   # recorded box is one fitted-font line tall (28px), not one 52px row tall.
   table_cell_line_spacing: font
   table_group_gap: 10
+  # No invoice table groups by date; declared because every parameter a
+  # primitive can read must have a value here, not a Python fallback.
+  table_group_date_format: numeric
   table_fill_inset: 0
   table_dividers: []
   table_offset_y: 0

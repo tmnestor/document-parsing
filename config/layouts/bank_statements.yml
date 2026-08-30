@@ -34,6 +34,11 @@ _dsl_defaults_values: &dsl_defaults_values
   table_row_inset_y: 0
   table_cell_line_spacing: row_height
   table_group_gap: 10
+  # How a `grouping: dedicated_row` date band prints its date. `numeric` draws
+  # the DD/MM/YYYY the ground truth authors; `long_au` draws the long Australian
+  # form a real CBA statement heads each day with, e.g. "Sat 07 Oct 2023". Per
+  # layout, because the banks differ: only cba_date_grouped overrides this.
+  table_group_date_format: numeric
   table_fill_inset: 0
   table_dividers: []
   table_offset_y: 0
@@ -547,6 +552,12 @@ layouts:
         rows: bank_transactions
         frame: plain
         grouping: dedicated_row
+        # A real CBA statement heads each day with the long Australian date
+        # ("Fri 28 Aug 2026"), not the DD/MM/YYYY its rows use. `carry_group_key:
+        # down` then copies this ink onto the rows beneath, so those rows read
+        # long form too — the transcript keeps quoting the page rather than
+        # reformatting it. The other banded layouts stay numeric.
+        group_date_format: long_au
         # plain rows draw no ruled header lines, but legacy CBA always ruled-lines
         # its header (12px rule + 44px labels + 16px rule = 72px) regardless of
         # date_grouping. Override the computed default (line_advance.body=44) to match.

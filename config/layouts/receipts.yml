@@ -53,6 +53,9 @@ _receipt_defaults_values: &receipt_defaults_values
   table_row_inset_y: 0
   table_cell_line_spacing: row_height
   table_group_gap: 10
+  # No receipt table groups by date; declared because every parameter a
+  # primitive can read must have a value here, not a Python fallback.
+  table_group_date_format: numeric
   table_fill_inset: 0
   table_dividers: []
   table_offset_y: 0
