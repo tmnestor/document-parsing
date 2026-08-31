@@ -151,7 +151,9 @@ leave that cell blank rather than borrowing the date from below.
 **Where the table has no date column, give the date a row of its own.** Some
 statements drop the date column entirely and print each day's date as a band
 across the whole table. There is no cell to put it in, so write it as a single
-cell spanning every column, in the position it appears on the page:
+cell spanning every column, in the position it appears on the page — this row
+is deliberately shorter than the others, a sanctioned exception to keeping one
+cell per column:
 
 ```html
 <table><thead><tr><th>Description</th><th>Debit</th><th>Balance</th></tr></thead>
