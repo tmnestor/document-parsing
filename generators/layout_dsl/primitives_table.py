@@ -580,8 +580,13 @@ def draw_table(block: dict, ctx: RenderContext, y: int) -> int:
                     group_date,
                     row=None,
                     col=0,
-                    column_key=str(columns[0]["key"]),
+                    # The band belongs to no column -- it is drawn across all of
+                    # them -- so it names none rather than borrowing the first
+                    # column's key, which would be the date column in one layout
+                    # and the description column in another.
+                    column_key=None,
                     header=False,
+                    colspan=len(columns),
                 )
             draw_text_left(
                 ctx.draw,
