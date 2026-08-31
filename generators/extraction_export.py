@@ -80,8 +80,41 @@ def line_item_rows(ground_truth: dict[str, dict], doc_type: str, definitions: di
         or wholly `NOT_FOUND` contributes no rows.
 
     Raises:
-        ExtractionExportError: A group field has no `line_item_column_names` entry.
+        ExtractionExportError: `line_item_column_names` or `parallel_field_groups`
+            is missing from `definitions`, or a group field has no
+            `line_item_column_names` entry.
     """
+    if "line_item_column_names" not in definitions:
+        raise ExtractionExportError(
+            "Cannot write the line-item export: a required config key is missing.\n"
+            "  What:     'line_item_column_names' is absent from the parsed field "
+            "definitions, but line_item_rows needs it to name each exploded column.\n"
+            "  Where:    config/field_definitions.yml, top-level key "
+            "'line_item_column_names:'\n"
+            "  Expected: a mapping from each plural grouped field to its singular "
+            "column name, e.g.\n"
+            "              line_item_column_names:\n"
+            "                TRANSACTION_DATES: TRANSACTION_DATE\n"
+            "  Recover:  add a 'line_item_column_names:' block to "
+            "config/field_definitions.yml."
+        )
+    if "parallel_field_groups" not in definitions:
+        raise ExtractionExportError(
+            "Cannot write the line-item export: a required config key is missing.\n"
+            "  What:     'parallel_field_groups' is absent from the parsed field "
+            "definitions, but line_item_rows needs it to know which fields explode "
+            "together per document type.\n"
+            "  Where:    config/field_definitions.yml, top-level key "
+            "'parallel_field_groups:'\n"
+            "  Expected: a mapping from DOCUMENT_TYPE to a list of grouped-field "
+            "lists, e.g.\n"
+            "              parallel_field_groups:\n"
+            "                BANK_STATEMENT:\n"
+            "                  - [TRANSACTION_DATES, TRANSACTION_DESCRIPTIONS]\n"
+            "  Recover:  add a 'parallel_field_groups:' block to "
+            "config/field_definitions.yml."
+        )
+
     names = definitions["line_item_column_names"]
     groups = definitions["parallel_field_groups"]
     rows: list[dict] = []
