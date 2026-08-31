@@ -543,7 +543,47 @@ column, fill it on every row; if there is not, the date takes a row of its own.
 
 Leave the existing "repeat it on every row" paragraph exactly as it is — `_PROMPT_COVERAGE` requires that phrase verbatim.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [ ] **Step 5: Make the leak guard see attributed cells**
+
+The guard cannot currently see a band cell. `tests/test_prompt.py::_example_values`
+gates each line on the literal string `"<td>"`, but a band line reads
+`<tr><td colspan="3">Tue 03 Mar 2015</td></tr>` — no bare `<td>` — so it falls
+through to the plain-text branch, which extracts only digit-bearing tokens. A
+real leak of the band's date would pass vacuously, which CLAUDE.md calls worse
+than no test at all. The extraction regex `<td[^>]*>(.*?)</td>` is already
+attribute-aware; only the gate is wrong.
+
+In `tests/test_prompt.py`, change:
+
+```python
+            if "<td>" in line or "<th>" in line:
+```
+
+to:
+
+```python
+            # `<td` not `<td>`: a band cell carries a colspan, and gating on the
+            # bare tag dropped the whole line into the plain-text branch, where
+            # a leaked date would have passed vacuously.
+            if "<td" in line or "<th" in line:
+```
+
+- [ ] **Step 6: Prove the guard fires on a planted leak**
+
+A guard that matches nothing passes vacuously. Plant a real corpus value in the
+band example and confirm the test fails. Edit `config/prompt.md` with the Edit
+tool — temporarily replace `Tue 03 Mar 2015` with a date that IS in the corpus,
+`Sat 07 Oct 2023` — then run:
+
+```bash
+conda run -n docparse pytest tests/test_prompt.py -q -k leak
+```
+
+Expected: **FAIL**, naming `Sat 07 Oct 2023`. If it passes, the gate fix did not
+take — the guard is still blind and must be fixed before going on. Then restore
+`Tue 03 Mar 2015`.
+
+- [ ] **Step 7: Run the tests to verify they pass**
 
 ```bash
 conda run -n docparse pytest tests/test_prompt.py -q
