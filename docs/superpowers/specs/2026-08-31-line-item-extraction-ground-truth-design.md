@@ -16,7 +16,7 @@ this writes
 
 one line per transaction, each carrying its own date, and its own balance.
 
-This adds that grain: `line_items.{jsonl,csv}`, one row per line item, alongside
+This adds that grain: `line_items.jsonl`, one row per line item, alongside
 the document-level file rather than replacing it.
 
 ### 1.1 The larger finding
@@ -42,7 +42,8 @@ the export is what made the gap visible.
 | Scope | **All three document types**, driven by the declared `parallel_field_groups`. | Bank-statements-only would force the type to be named in Python. Receipts and invoices already declare groups; the mechanism is type-agnostic and costs nothing extra. |
 | Where the balance comes from | **Authored in `ground_truth/*.yml`.** | Capturing it from `events.jsonl` works and cannot drift, but makes `extract` depend on `generate` having run, and leaves the value un-authored. Re-deriving it inside the export would be a second implementation of the provider's arithmetic. |
 | Who computes the balance after this | **Nobody. The provider reads the authored field.** | Authoring the values while the provider keeps computing them is two implementations of one truth, cross-checked at best. One source, or it is not a source. |
-| File layout | **A new `line_items.{jsonl,csv}` sibling.** | Replacing `ground_truth.*` discards fields with no per-line meaning (`SUPPLIER_NAME`, `BUSINESS_ABN`, `TOTAL_AMOUNT`) and breaks existing consumers. |
+| File layout | **A new `line_items.jsonl` sibling.** | Replacing `ground_truth.*` discards fields with no per-line meaning (`SUPPLIER_NAME`, `BUSINESS_ABN`, `TOTAL_AMOUNT`) and breaks existing consumers. |
+| Line-item format | **JSONL only, no CSV.** | A line-item row's columns differ per document type — a statement has `TRANSACTION_BALANCE`, an invoice `LINE_ITEM_QUANTITY`. CSV needs one fixed header, forcing either a sparse table implying a schema that does not exist, or a file per type. JSONL rows need not share keys. The document-level `ground_truth.csv` keeps its CSV: one fixed column set, existing consumers. |
 | Column names | **Singularised via a declared mapping.** | A row reading `TRANSACTION_DATES: 01/09/2023` misstates its own grain. The mapping lives in `field_definitions.yml`; no name is invented in Python. |
 
 ## 3. Authored balances
