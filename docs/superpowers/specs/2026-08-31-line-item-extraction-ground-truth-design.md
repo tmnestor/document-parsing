@@ -90,8 +90,16 @@ balance_consistency:
   paid_field: TRANSACTION_AMOUNTS_PAID
   received_field: TRANSACTION_AMOUNTS_RECEIVED
   closing_field: ACCOUNT_BALANCE
-  decimals: 2
 ```
+
+**No `decimals` key, deliberately** — corrected 2026-08-31, after an earlier draft
+of this spec included one by false analogy with `gst_consistency`. GST needs a
+precision because it is a *division* (`total / 11`) that produces excess digits.
+The balance chain is addition and subtraction of already-2dp authored values, and
+Decimal arithmetic on those is exact, so quantizing would be a no-op — and worse
+than a no-op, since it would round away a 3dp authoring error this check should
+surface. Decimal equality is numeric, not textual, so `3896.620` already compares
+equal to `3896.62` with no rounding.
 
 Every key required; a missing one is a startup error with the four-element
 diagnostic. `validate` fails on any statement whose chain does not close.
