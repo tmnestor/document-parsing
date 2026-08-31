@@ -238,20 +238,25 @@ def _check_gst(case_id: str, fields: dict) -> list[str]:
 
 
 def _balance_rule() -> dict:
-    """The declared balance-chain rule. Every key required."""
+    """The declared balance-chain rule. Every key required.
+
+    No `decimals` key: unlike GST (a division that genuinely produces excess
+    precision), this rule only adds and subtracts already-2dp authored values,
+    which Decimal computes exactly. Quantizing would be a no-op at best and,
+    at worst, mask an authoring error like a stray 3dp amount by rounding it
+    away — Decimal equality is already numeric, not textual, so `3896.620 ==
+    3896.62` compares True with no rounding needed.
+    """
     example = (
         "            balance_consistency:\n"
         "              balances_field: TRANSACTION_BALANCES\n"
         "              paid_field: TRANSACTION_AMOUNTS_PAID\n"
         "              received_field: TRANSACTION_AMOUNTS_RECEIVED\n"
-        "              closing_field: ACCOUNT_BALANCE\n"
-        "              decimals: 2"
+        "              closing_field: ACCOUNT_BALANCE"
     )
     rule = _required_section("balance_consistency", example)
     missing = [
-        k
-        for k in ("balances_field", "paid_field", "received_field", "closing_field", "decimals")
-        if k not in rule
+        k for k in ("balances_field", "paid_field", "received_field", "closing_field") if k not in rule
     ]
     if missing:
         raise SchemaError(
@@ -269,6 +274,10 @@ def _check_balance_chain(case_id: str, fields: dict) -> list[str]:
 
     Returns error strings rather than raising, matching `_check_gst` — a bad
     value in an authored entry is a finding to collect, not a startup failure.
+    Every value is parsed defensively: a malformed or empty pipe segment
+    (e.g. an entry hand-edited to "50.00||30.00") must not crash `validate`,
+    since the amount-format checks elsewhere in `validate_entry` already
+    report a bad value on their own pass.
 
     Args:
         case_id: The entry's case id, named in every message.
@@ -276,8 +285,8 @@ def _check_balance_chain(case_id: str, fields: dict) -> list[str]:
 
     Returns:
         One message per broken link, plus one if the chain does not end at the
-        closing balance. Empty when the statement is consistent, or carries no
-        balances field at all.
+        closing balance. Empty when the statement is consistent, carries no
+        balances field at all, or any value fails to parse as a decimal.
     """
     rule = _balance_rule()
     if rule["balances_field"] not in fields:
@@ -287,12 +296,18 @@ def _check_balance_chain(case_id: str, fields: dict) -> list[str]:
         text = str(value).strip()
         return Decimal("0") if text == "NOT_FOUND" else Decimal(text)
 
-    balances = [Decimal(v.strip()) for v in str(fields[rule["balances_field"]]).split("|")]
-    paid = [amount(v) for v in str(fields[rule["paid_field"]]).split("|")]
-    received = [amount(v) for v in str(fields[rule["received_field"]]).split("|")]
+    try:
+        balances = [amount(v) for v in str(fields[rule["balances_field"]]).split("|")]
+        paid = [amount(v) for v in str(fields[rule["paid_field"]]).split("|")]
+        received = [amount(v) for v in str(fields[rule["received_field"]]).split("|")]
+        closing = amount(str(fields[rule["closing_field"]]))
+    except InvalidOperation:
+        return []  # the amount-format check elsewhere already reports this
 
     errors: list[str] = []
     for index in range(1, len(balances)):
+        if index >= len(paid) or index >= len(received):
+            break  # the parallel-group count check elsewhere already reports this
         expected = balances[index - 1] - paid[index] + received[index]
         if balances[index] != expected:
             errors.append(
@@ -302,8 +317,7 @@ def _check_balance_chain(case_id: str, fields: dict) -> list[str]:
                 f"Either correct the balance at position {index}, or the amounts on that row."
             )
 
-    closing = Decimal(str(fields[rule["closing_field"]]))
-    if balances[-1] != closing:
+    if balances and balances[-1] != closing:
         errors.append(
             f"{case_id}: {rule['balances_field']} ends at {balances[-1]} but "
             f"{rule['closing_field']} is {closing}. The last running balance is the closing "

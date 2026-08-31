@@ -184,9 +184,15 @@ gst_consistency:
 #
 # NOT_FOUND reads as zero. The opening balance the synthetic leading row prints
 # is not in the list: it is balance[0] + paid[0] - received[0].
+#
+# Deliberately no `decimals` key, unlike gst_consistency above: GST needs one
+# because it is a division (total / 11) that produces excess digits to round.
+# This rule only adds and subtracts already-2dp authored values, which Decimal
+# computes exactly — quantizing would be a no-op at best, and at worst would
+# mask a stray 3dp authoring error by rounding it away. Decimal equality is
+# already numeric, not textual: 3896.620 == 3896.62 with no rounding needed.
 balance_consistency:
   balances_field: TRANSACTION_BALANCES
   paid_field: TRANSACTION_AMOUNTS_PAID
   received_field: TRANSACTION_AMOUNTS_RECEIVED
   closing_field: ACCOUNT_BALANCE
-  decimals: 2
