@@ -173,7 +173,21 @@ def ground_truth_rows(corpus_dir: Path) -> list[dict]:
         # Filenames are {case_id}_{doc_type}; strip the suffix rather than
         # splitting on "_", which would truncate `bank_statements`.
         suffix = f"_{doc_type}"
-        case_id = stem[: -len(suffix)] if stem.endswith(suffix) else stem
+        if not stem.endswith(suffix):
+            raise _err(
+                f"image stem '{stem}' in {corpus_dir.name}/manifest.jsonl does not end in "
+                f"'{suffix}', so no case_id can be recovered from it against doc_type "
+                f"'{doc_type}'.",
+                path=manifest.resolve(),
+                key="image",
+                expected="every image path to be {case_id}_{doc_type}.<ext>, matching its "
+                "record's doc_type, e.g.\n"
+                '              {"image": "images/CASE001_invoices.png", '
+                '"doc_type": "invoices", ...}',
+                recover="fix the manifest record's image path or doc_type so they agree, "
+                "or re-run `export` and `degrade` to regenerate a consistent manifest.",
+            )
+        case_id = stem[: -len(suffix)]
         rows.append(
             {
                 "corpus": corpus_dir.name,
@@ -199,7 +213,8 @@ def write_ground_truth(rows: list[dict], exports_dir: Path) -> Path:
         The path written.
 
     Raises:
-        MatrixError: No row describes the clean baseline.
+        MatrixError: No row describes the clean baseline, or a row names a corpus
+            directory that is not beside `exports_dir`.
     """
     if not any(row["family"] == "clean" for row in rows):
         raise _err(
@@ -213,6 +228,22 @@ def write_ground_truth(rows: list[dict], exports_dir: Path) -> Path:
             recover="include the clean corpus in the run; without it 'clean' is a class "
             "no page demonstrates.",
         )
+
+    for row in rows:
+        if not (exports_dir / row["corpus"]).is_dir():
+            raise _err(
+                f"row '{row['corpus']}' names a directory that does not exist beside "
+                f"the pooled ground truth at {exports_dir.resolve()}.",
+                path=exports_dir.resolve(),
+                key=row["corpus"],
+                expected="every corpus a pooled row references to be a directory beside "
+                f"{_GROUND_TRUTH_NAME}, since `image` and `transcript` resolve as "
+                f"exports_dir/corpus/image, e.g.\n"
+                f"              {exports_dir.resolve()}/{row['corpus']}",
+                recover="write the pooled ground truth into the same directory as the "
+                "corpora it indexes, e.g. pass --out pointing at the corpora's parent, "
+                f"or move {row['corpus']!r} beside it.",
+            )
 
     path = exports_dir / _GROUND_TRUTH_NAME
     path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
