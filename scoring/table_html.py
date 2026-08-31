@@ -90,6 +90,7 @@ class _GridParser(HTMLParser):
             self._close_table()
             self._grid = []
             self._carries = {}
+            self._width = None
         elif tag == "tr":
             if self._grid is None:
                 return
