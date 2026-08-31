@@ -6,11 +6,14 @@ accepted: a model that emits one reports `table_count_pred` of 0, which reads as
 a format failure rather than being scored as partial cells.
 
 Spans expand by REPLICATION -- a cell covering several grid positions holds its
-text at every one of them. That is what a browser renders and what a reader sees
-at each position, and it leaves every row of a table the same width, which the
-positional comparison in `scoring.tables` depends on. A model that writes a
-merged label out on each covered row instead of using `rowspan` therefore scores
-those cells correct; one that leaves them blank does not.
+text at every one of them -- with one exception: a cell spanning the table's
+FULL width is a section header (a date band), not a label over columns, so it
+occupies a single position. One datum, one cell compared. That is what a
+browser renders and what a reader sees at each position, and it leaves every
+row of a table the same width, which the positional comparison in
+`scoring.tables` depends on. A model that writes a merged label out on each
+covered row instead of using `rowspan` therefore scores those cells correct;
+one that leaves them blank does not.
 
 Built on `html.parser` from the standard library rather than a regex or a third
 party parser. Predictions are arbitrary model output, and `score_tables` promises
@@ -74,6 +77,10 @@ class _GridParser(HTMLParser):
         self._cell: list[str] | None = None
         self._colspan = 1
         self._rowspan = 1
+        # The grid's width, learned from the first row that closes. A cell
+        # spanning all of it is a section header (a date band), not a column
+        # label, so it occupies one position instead of replicating.
+        self._width: int | None = None
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         """Open a table, row or cell, closing any of those left open."""
@@ -125,7 +132,13 @@ class _GridParser(HTMLParser):
 
         self._fill_carried()
         start = self._column
-        for offset in range(self._colspan):
+        # A cell covering the whole grid is a band: one datum introducing a
+        # group, not a label over columns. Replicating it would charge one
+        # misread date as several wrong cells. A partial span still replicates,
+        # because a spanning header genuinely labels each column it covers.
+        full_width = self._width is not None and start == 0 and self._colspan >= self._width
+        spans = 1 if full_width else self._colspan
+        for offset in range(spans):
             self._row.append(text)
             if self._rowspan > 1:
                 # Counting the current row, so the decrement at row close leaves
@@ -151,6 +164,8 @@ class _GridParser(HTMLParser):
         self._fill_carried()
         if self._grid is not None:
             self._grid.append(self._row)
+        if self._width is None and self._row:
+            self._width = len(self._row)
         self._row = None
 
         for column in list(self._carries):
