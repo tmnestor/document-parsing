@@ -1,9 +1,9 @@
 """Row providers — the DSL's one sanctioned escape hatch.
 
-Some table data is computed rather than stored: a bank statement's running
-balance and opening row exist nowhere in ground truth. Rather than put
-arithmetic in YAML, a table names a provider registered here, and the provider
-returns row dicts. Providers return data only — they never draw or position.
+Some table data is computed rather than stored: a bank statement's opening
+row exists nowhere in ground truth. Rather than put arithmetic in YAML, a
+table names a provider registered here, and the provider returns row dicts.
+Providers return data only — they never draw or position.
 """
 
 import hashlib
@@ -265,11 +265,12 @@ def _require_param(params: dict, key: str, *, because: str) -> Any:
     ),
 )
 def bank_transactions(entry: dict, params: dict) -> list[dict]:
-    """Build bank statement rows with running balances computed backwards.
+    """Build bank statement rows with their authored running balances.
 
     Mirrors the legacy `_parse_transactions` / `_compute_running_balances`
-    helpers: balances are derived from ACCOUNT_BALANCE (the closing balance) by
-    walking the transactions in reverse.
+    helpers' row shape, but the balance itself is read from ground truth
+    rather than computed: it is ink on the page, and `TRANSACTION_BALANCES`
+    is its one source of truth.
 
     Args:
         entry: The ground-truth entry.
@@ -342,15 +343,20 @@ def bank_transactions(entry: dict, params: dict) -> list[dict]:
                 "description": "TRANSACTION_DESCRIPTIONS",
                 "debit": "TRANSACTION_AMOUNTS_PAID",
                 "credit": "TRANSACTION_AMOUNTS_RECEIVED",
+                "balance": "TRANSACTION_BALANCES",
             }
         },
     )
 
-    balance = _to_decimal(entry["fields"].get("ACCOUNT_BALANCE", "0"))
-    for row in reversed(rows):
-        row["balance"] = balance
+    # The running balance is AUTHORED, not computed here. It is ink on the page
+    # and it is scored, so it lives in ground_truth/ like every other drawn value
+    # -- YAML is the single source of truth. `balance_consistency` in
+    # config/field_definitions.yml keeps the authored chain honest, and the
+    # closing balance is checked against ACCOUNT_BALANCE there rather than being
+    # the seed for a backward walk here.
+    for row in rows:
+        row["balance"] = _to_decimal(row["balance"])
         row["synthetic"] = False
-        balance = balance + _to_decimal(row["debit"]) - _to_decimal(row["credit"])
         # Coerce real amounts to Decimal so the table formats them as currency, matching
         # the legacy renderer. The absent sentinel is left alone: legacy draws nothing
         # for it, and _cell_text maps it to the empty string.
@@ -368,11 +374,14 @@ def bank_transactions(entry: dict, params: dict) -> list[dict]:
             ref_num = str(int(digest, 16) % 10**10).zfill(10)
             row["reference"] = f"{prefix}{ref_num}" + pad_char * pad_width
 
-    # The closing balance is exactly the last real row's own balance -- the
-    # reversed loop above seeds it straight from ACCOUNT_BALANCE before any
-    # adjustment -- captured now, before a leading synthetic row (if any)
-    # shifts what rows[0] means, and before a trailing one is appended.
-    closing_balance = rows[-1]["balance"] if rows else balance
+    # The closing balance is exactly the last real row's own authored balance
+    # -- captured now, before a leading synthetic row (if any) shifts what
+    # rows[0] means, and before a trailing one is appended. With no real rows
+    # there is no authored balance to read, so fall back to ACCOUNT_BALANCE,
+    # matching what the old backward walk would have seeded and never adjusted.
+    closing_balance = (
+        rows[-1]["balance"] if rows else _to_decimal(entry["fields"].get("ACCOUNT_BALANCE", "0"))
+    )
 
     if wants and rows:
         key = wants[0]
