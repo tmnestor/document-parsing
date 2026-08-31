@@ -62,8 +62,13 @@ block_separator: "\n\n"
 emphasis: none
 
 # A group header — a shaded date band drawn across the full table width, with
-# that day's transactions listed beneath it — is folded into the rows it heads,
-# so every row carries its own date and stands alone.
+# that day's transactions listed beneath it — is carried onto every row of the
+# group it heads. Where the table has no column to carry it into, the band
+# stands as its own row instead, spanning the full width. One rule, two limbs:
+# the shape of the table selects between them — a reader tells which applies
+# by looking at the header row — and no layout chooses. See
+# docs/superpowers/specs/2026-08-31-date-bands-without-a-date-column-design.md
+# §3 for the rule stated in full.
 #
 # 'down' DEPARTS from recording only what the page shows: the page prints the
 # date once. It is the single place this corpus infers rather than transcribes,
@@ -78,15 +83,16 @@ emphasis: none
 # band" was a pipe-table constraint and it is gone.
 #
 # The reason that remains is that one page feature must have exactly ONE ground
-# truth. `carry_group_key` is GLOBAL policy, so a spanning band row would not be
-# an alternative for banded statements — it would be a second, contradictory
-# answer to a construct this key already answers, on every table at once. See
+# truth. `carry_group_key` is GLOBAL policy: which limb applies is decided by
+# the table's shape, not by the layout, so the same construct never gets two
+# contradictory answers on the same table. See
 # docs/superpowers/specs/2026-08-27-merged-cells-and-spanning-headers-design.md
 # §2 for why `rowspan` deliberately does not mean a grouped date, and §9, which
 # places revisiting this out of scope: it changes a shipped convention and
 # belongs in its own spec.
 #
-# Set 'none' to record the band as its own row again.
+# Set 'none' to record every band as its own row, even where a date column
+# exists to carry it into.
 carry_group_key: down
 
 # A run of repeated glyphs is decoration, and is not recorded — the glyphs are

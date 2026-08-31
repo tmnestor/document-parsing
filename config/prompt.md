@@ -132,8 +132,9 @@ in its place.
 A statement prints a date once and then lists that day's entries beneath it with
 the date column left blank. It does this in two ways, and both are the same
 thing: the date may sit on a band of its own across the table, or it may sit in
-the date cell of the group's first entry. Either way, put the date in the date
-cell of **every** row of that group, and do not give the date a row of its own:
+the date cell of the group's first entry. Where the table has a date column,
+put the date in the date cell of **every** row of that group, and do not give
+the date a row of its own:
 
 ```html
 <table><thead><tr><th>Date</th><th>Description</th><th>Debit</th></tr></thead>
