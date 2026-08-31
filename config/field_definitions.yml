@@ -159,7 +159,8 @@ parallel_field_groups:
   INVOICE:
     - [LINE_ITEM_DESCRIPTIONS, LINE_ITEM_QUANTITIES, LINE_ITEM_PRICES, LINE_ITEM_TOTAL_PRICES]
   BANK_STATEMENT:
-    - [TRANSACTION_DATES, TRANSACTION_DESCRIPTIONS, TRANSACTION_AMOUNTS_PAID]
+    - [TRANSACTION_DATES, TRANSACTION_DESCRIPTIONS, TRANSACTION_AMOUNTS_PAID,
+       TRANSACTION_AMOUNTS_RECEIVED, TRANSACTION_BALANCES]
 
 # GST arithmetic, checked by `pipeline validate` when IS_GST_INCLUDED is true:
 # GST_AMOUNT must equal TOTAL_AMOUNT / divisor, rounded half-up to `decimals`.
@@ -173,3 +174,19 @@ gst_consistency:
   inclusive_field: IS_GST_INCLUDED
   gst_field: GST_AMOUNT
   total_field: TOTAL_AMOUNT
+
+# The running balance printed on every statement row. Authored, not computed:
+# it is ink on the page and it is scored, so it belongs here rather than in
+# Python. This rule is what keeps the authored chain honest.
+#
+#   balance[i] == balance[i-1] - paid[i] + received[i]
+#   balance[last] == ACCOUNT_BALANCE
+#
+# NOT_FOUND reads as zero. The opening balance the synthetic leading row prints
+# is not in the list: it is balance[0] + paid[0] - received[0].
+balance_consistency:
+  balances_field: TRANSACTION_BALANCES
+  paid_field: TRANSACTION_AMOUNTS_PAID
+  received_field: TRANSACTION_AMOUNTS_RECEIVED
+  closing_field: ACCOUNT_BALANCE
+  decimals: 2

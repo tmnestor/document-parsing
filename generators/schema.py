@@ -237,6 +237,81 @@ def _check_gst(case_id: str, fields: dict) -> list[str]:
     ]
 
 
+def _balance_rule() -> dict:
+    """The declared balance-chain rule. Every key required."""
+    example = (
+        "            balance_consistency:\n"
+        "              balances_field: TRANSACTION_BALANCES\n"
+        "              paid_field: TRANSACTION_AMOUNTS_PAID\n"
+        "              received_field: TRANSACTION_AMOUNTS_RECEIVED\n"
+        "              closing_field: ACCOUNT_BALANCE\n"
+        "              decimals: 2"
+    )
+    rule = _required_section("balance_consistency", example)
+    missing = [
+        k
+        for k in ("balances_field", "paid_field", "received_field", "closing_field", "decimals")
+        if k not in rule
+    ]
+    if missing:
+        raise SchemaError(
+            "config/field_definitions.yml 'balance_consistency:' is incomplete.\n"
+            f"  What:     missing {', '.join(missing)}.\n"
+            f"  Where:    {_FIELD_DEFS_PATH.resolve()}, under 'balance_consistency:'.\n"
+            f"  Expected:\n{example}\n"
+            "  Recover:  add the missing key(s) to that block."
+        )
+    return rule
+
+
+def _check_balance_chain(case_id: str, fields: dict) -> list[str]:
+    """Report any authored balance that does not follow from its amounts.
+
+    Returns error strings rather than raising, matching `_check_gst` — a bad
+    value in an authored entry is a finding to collect, not a startup failure.
+
+    Args:
+        case_id: The entry's case id, named in every message.
+        fields: The entry's `fields` mapping.
+
+    Returns:
+        One message per broken link, plus one if the chain does not end at the
+        closing balance. Empty when the statement is consistent, or carries no
+        balances field at all.
+    """
+    rule = _balance_rule()
+    if rule["balances_field"] not in fields:
+        return []
+
+    def amount(value: str) -> Decimal:
+        text = str(value).strip()
+        return Decimal("0") if text == "NOT_FOUND" else Decimal(text)
+
+    balances = [Decimal(v.strip()) for v in str(fields[rule["balances_field"]]).split("|")]
+    paid = [amount(v) for v in str(fields[rule["paid_field"]]).split("|")]
+    received = [amount(v) for v in str(fields[rule["received_field"]]).split("|")]
+
+    errors: list[str] = []
+    for index in range(1, len(balances)):
+        expected = balances[index - 1] - paid[index] + received[index]
+        if balances[index] != expected:
+            errors.append(
+                f"{case_id}: {rule['balances_field']}[{index}] is {balances[index]}, but the "
+                f"previous balance {balances[index - 1]} minus {rule['paid_field']} "
+                f"{paid[index]} plus {rule['received_field']} {received[index]} is {expected}. "
+                f"Either correct the balance at position {index}, or the amounts on that row."
+            )
+
+    closing = Decimal(str(fields[rule["closing_field"]]))
+    if balances[-1] != closing:
+        errors.append(
+            f"{case_id}: {rule['balances_field']} ends at {balances[-1]} but "
+            f"{rule['closing_field']} is {closing}. The last running balance is the closing "
+            f"balance; either correct the final balance, or {rule['closing_field']}."
+        )
+    return errors
+
+
 def layout_field_names_for(layout_id: str) -> list[str]:
     """Field names required only by one layout.
 
@@ -408,6 +483,7 @@ def validate_entry(case_id: str, entry: dict) -> list[str]:
             )
 
     errors.extend(_check_gst(case_id, fields))
+    errors.extend(_check_balance_chain(case_id, fields))
 
     return errors
 
