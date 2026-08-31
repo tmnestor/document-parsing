@@ -148,6 +148,21 @@ Carry a date **downwards only**. Where a row's date cell is blank and no date
 appears above it in the table — an opening-balance line is the usual case —
 leave that cell blank rather than borrowing the date from below.
 
+**Where the table has no date column, give the date a row of its own.** Some
+statements drop the date column entirely and print each day's date as a band
+across the whole table. There is no cell to put it in, so write it as a single
+cell spanning every column, in the position it appears on the page:
+
+```html
+<table><thead><tr><th>Description</th><th>Debit</th><th>Balance</th></tr></thead>
+<tbody><tr><td colspan="3">Tue 03 Mar 2015</td></tr>
+<tr><td>Sprocket Housing 6mm</td><td>41.20</td><td>908.15</td></tr>
+<tr><td>Retainer Clip 2mm</td><td>58.90</td><td>849.25</td></tr></tbody></table>
+```
+
+Look at the header row to decide which of these two applies: if there is a date
+column, fill it on every row; if there is not, the date takes a row of its own.
+
 **Where a page is laid out in side-by-side columns, read one column fully before
 starting the next, working left to right.** Do not read across the page in
 visual rows. A header with payer details on the left and document details on the
