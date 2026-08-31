@@ -162,7 +162,7 @@ def ground_truth_rows(corpus_dir: Path) -> list[dict]:
                 path=manifest.resolve(),
                 key=", ".join(missing),
                 expected="every manifest record to carry family and severity, e.g.\n"
-                '              {"image": "images/CASE001_invoices.png", '
+                '              {"image": "images/CASE001_invoices.jpg", '
                 '"family": "scan", "severity": "moderate", ...}',
                 recover="re-run `export` and `degrade` with the current code; a corpus "
                 "written before 2026-09-01 predates these fields.",
@@ -200,6 +200,52 @@ def ground_truth_rows(corpus_dir: Path) -> list[dict]:
             }
         )
     return rows
+
+
+def assert_matched_pages(rows: list[dict], exports_dir: Path) -> None:
+    """Verify every family/severity group in a pooled ground truth covers the same pages.
+
+    The pooled file assumes a comparison across tiers isolates image quality: a
+    row's `family`/`severity` names which corpus produced it, and that only
+    isolates image quality if every corpus renders the same `(case_id,
+    doc_type)` pages. Nothing checked that before this -- a caller that filters
+    the clean corpus differently from the tiers (e.g. by re-reading its whole
+    manifest instead of the run's own `--type`/`--limit` selection) would pool
+    mismatched page counts silently.
+
+    Args:
+        rows: Rows from `ground_truth_rows`, pooled across every corpus.
+        exports_dir: The directory the pooled file is written into, named in
+            the diagnostic.
+
+    Raises:
+        MatrixError: Some family/severity group covers a different set of
+            `(case_id, doc_type)` pages than another.
+    """
+    grouped: dict[tuple[str, str], set[tuple[str, str]]] = {}
+    for row in rows:
+        key = (str(row["family"]), str(row["severity"]))
+        grouped.setdefault(key, set()).add((str(row["case_id"]), str(row["doc_type"])))
+
+    if len(grouped) <= 1:
+        return
+
+    (reference_key, reference_pages), *rest = grouped.items()
+    for key, pages in rest:
+        if pages != reference_pages:
+            raise _err(
+                f"{key[0]}-{key[1]} covers {len(pages)} page(s), but {reference_key[0]}-"
+                f"{reference_key[1]} covers {len(reference_pages)}, so the pooled ground "
+                "truth does not describe one matched page set across corpora.",
+                path=exports_dir.resolve(),
+                key=_GROUND_TRUTH_NAME,
+                expected="every family/severity group to cover the same (case_id, doc_type) "
+                "pages as every other, since a score comparison across tiers assumes only "
+                "image quality differs.",
+                recover="build the pooled rows from the same page selection for every "
+                "corpus -- restrict the clean corpus to the pages the degraded corpora "
+                "actually cover, rather than its whole manifest.",
+            )
 
 
 def write_ground_truth(rows: list[dict], exports_dir: Path) -> Path:

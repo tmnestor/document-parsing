@@ -288,10 +288,15 @@ never recovered by OCR or by hand.
 | `transcripts/` | The canonical transcript for each page, same stem. |
 | `layout/` | OmniDocBench-shaped `layout_dets` per page: boxes, categories, reading order. |
 | `tables/` | Table HTML for TEDS, one file per page with a table ({tabled} of {total}; absent otherwise). |
-| `manifest.jsonl` | One row per case: paths, doc_type, both hashes, layout, tables. |
+| `manifest.jsonl` | One row per case: paths, doc_type, hashes, layout, tables, family, severity. |
 | `prompt.md` | The prompt these transcripts assume. |
 | `serialisation.yml` | The exact policy that produced these transcripts. |
 {multi_table_note}
+Every manifest record's `family`/`severity` name the intake channel and
+degradation tier that produced its image — `"clean"`/`"none"` for this
+undegraded export; a page a `degrade` run later damaged states which family
+(e.g. `scan`) and severity (e.g. `heavy`) instead.
+
 ## The layout annotations
 
 `layout/{{stem}}.json` is a single object, `{{"layout_dets": [...]}}`, holding one

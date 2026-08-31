@@ -40,6 +40,8 @@ evaluation_data/corpus_<stamp>/
   parsing_<stamp>/    the clean corpus     — for document parsing / transcription
   degraded/            scan and photo intake, three severities each, all
                         three document types — for robustness evaluation
+                          matrix.jsonl        one row per corpus (clean + six tiers)
+                          ground_truth.jsonl  one row per image across all seven
   extraction_<stamp>/  flat images + ground_truth.{jsonl,csv} — for
                         information extraction
 ```
@@ -50,7 +52,24 @@ manifest, the prompt, and the serialisation policy — see "The export" below.
 
 `degraded/` reuses the clean transcripts byte for byte (degradation changes
 how legible a page is, never what it says), so any score difference between
-clean and degraded is attributable to image quality alone.
+clean and degraded is attributable to image quality alone. Every image across
+the seven corpora — the clean export plus scan/photo × light/moderate/heavy —
+carries a `family`/`severity` label (`"clean"`/`"none"` for the undegraded
+baseline), stated on the image's own manifest record and pooled into two index
+files written beside the tier directories:
+
+- `matrix.jsonl` — one row per corpus: `{corpus, family, severity, pages,
+  doc_types, manifest_sha256}`. Names the seven corpora as one set and pins the
+  manifest hash each was built from, so `scoring/score.py --matrix` can score
+  every corpus in one run and refuse a corpus that has since been re-exported.
+- `ground_truth.jsonl` — one row per image across all seven corpora:
+  `{corpus, image, transcript, case_id, doc_type, family, severity}`. It is
+  the label set for degradation as a scored dimension — which intake channel
+  and severity produced this image — and names the matching transcript so
+  scoring transcription and identification both read from one file.
+
+Both are written by `generators/degradation/matrix.py`, driven from
+`generators/degradation/cli.py`.
 
 `extraction_<stamp>/` is a fourth projection of the same authored truth —
 flat per-page images alongside `ground_truth.jsonl` and `ground_truth.csv` —

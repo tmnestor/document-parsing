@@ -32,24 +32,55 @@ _TIER_SUFFIX = re.compile(r"^(?P<corpus>.+)_(?P<family>[^-_]+)-(?P<severity>[^-_
 
 
 def derive_family_severity(corpus_dir: Path) -> tuple[str, str]:
-    """Recover a corpus's family and severity from its directory name.
+    """Read a corpus's family and severity from its own manifest.
 
     `--corpus` scores one directory at a time with no matrix row to read
-    `family`/`severity` from, so scoring a tier this way used to hardcode
-    `clean`/`none` for every corpus, tier or not (#N1). Tier directories
-    follow one stated naming convention; this parses it back.
+    `family`/`severity` from, but every manifest record now carries them
+    (`generators/export.py:manifest_record`), and every record in one corpus
+    agrees. Reading the manifest makes this the same fact `matrix.jsonl` and
+    `ground_truth.jsonl` state, rather than a second, weaker guess parsed back
+    out of a directory name. Parsing the `_{family}-{severity}` suffix off the
+    name is kept only as a fallback for a manifest written before these fields
+    existed; when neither source has an answer, this raises rather than
+    silently scoring the corpus as `clean`.
 
     Args:
         corpus_dir: The corpus directory passed to `--corpus`.
 
     Returns:
-        `(family, severity)` parsed from the `_{family}-{severity}` suffix, or
-        `("clean", "none")` when the name carries no such suffix.
+        `(family, severity)`, read from the first record of the corpus's own
+        `manifest.jsonl` when it carries the fields, or parsed from the
+        `_{family}-{severity}` directory-name suffix otherwise.
+
+    Raises:
+        ScoringError: The manifest carries no `family`/`severity` and the
+            directory name carries no `_{family}-{severity}` suffix either.
     """
+    manifest = corpus_dir / "manifest.jsonl"
+    if manifest.exists():
+        for line in manifest.read_text(encoding="utf-8").splitlines():
+            if not line:
+                continue
+            record = json.loads(line)
+            if "family" in record and "severity" in record:
+                return str(record["family"]), str(record["severity"])
+            break
+
     match = _TIER_SUFFIX.match(corpus_dir.name)
-    if match is None:
-        return "clean", "none"
-    return match.group("family"), match.group("severity")
+    if match is not None:
+        return match.group("family"), match.group("severity")
+
+    raise diagnostic(
+        f"{corpus_dir.name} has no family/severity in {manifest.name}, and its directory "
+        "name carries no _{family}-{severity} suffix either.",
+        path=corpus_dir.resolve(),
+        key="family, severity",
+        expected="either a manifest.jsonl whose records carry family/severity (written by "
+        "the current export/degrade), or a directory named "
+        "<corpus>_<family>-<severity>, e.g. parsing_20260825_scan-heavy.",
+        recover="pass --family/--severity explicitly, or re-run export/degrade with the "
+        "current code so the manifest carries the labels.",
+    )
 
 
 def score_page(reference: str, prediction: str | None, policy: dict, *, verified: bool) -> dict:

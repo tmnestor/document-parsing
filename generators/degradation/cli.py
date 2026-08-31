@@ -37,6 +37,7 @@ from rich.progress import Progress
 
 from generators.degradation import degrade_page, load_tiers, page_seed
 from generators.degradation.matrix import (
+    assert_matched_pages,
     ground_truth_rows,
     matrix_row,
     write_ground_truth,
@@ -273,9 +274,16 @@ def degrade(
     # of thing: an index spanning corpora rather than describing one. Each row
     # also names the transcript, so a consumer scoring identification and
     # transcription reads one file rather than joining three.
-    gt_rows = ground_truth_rows(corpus)
+    #
+    # The clean rows are restricted to the pages `records` actually covers --
+    # `--type`/`--limit` filtered which pages got degraded, and re-reading the
+    # clean manifest whole would pool every clean page against only the
+    # filtered degraded ones, silently unbalancing the benchmark.
+    selected_images = {r["image"] for r in records}
+    gt_rows = [row for row in ground_truth_rows(corpus) if row["image"] in selected_images]
     for tier in tiers:
         gt_rows.extend(ground_truth_rows(plan.out / f"{corpus.name}_{tier.family}-{tier.name}"))
+    assert_matched_pages(gt_rows, plan.out)
     gt_path = write_ground_truth(gt_rows, plan.out)
     rprint(f"[green]Ground truth written: {gt_path} ({len(gt_rows)} page(s))[/green]")
 
