@@ -223,6 +223,8 @@ def degrade(
                     target / "images" / image_name,
                     target / "transcripts" / transcript_name,
                     record["doc_type"],
+                    family=tier.family,
+                    severity=tier.name,
                 )
 
                 layout_name = Path(record["layout"]).name

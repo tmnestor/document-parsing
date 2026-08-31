@@ -83,7 +83,7 @@ def _missing(kind: str, path: Path, *, recover_command: str) -> ExportError:
     )
 
 
-def manifest_record(image: Path, transcript: Path, doc_type: str) -> dict:
+def manifest_record(image: Path, transcript: Path, doc_type: str, *, family: str, severity: str) -> dict:
     """Build one manifest row.
 
     Paths are recorded relative to the export root, so the shipped corpus stays
@@ -93,10 +93,15 @@ def manifest_record(image: Path, transcript: Path, doc_type: str) -> dict:
         image: The rendered page.
         transcript: Its Markdown transcript.
         doc_type: The document type key, e.g. "invoices".
+        family: Intake family that produced this page — "clean" for the
+            undegraded baseline, otherwise a family declared in
+            config/degradation.yml, e.g. "scan".
+        severity: Tier severity, "none" for the baseline, otherwise a tier name
+            declared for that family, e.g. "moderate".
 
     Returns:
-        `{"image", "transcript", "doc_type", "sha256", "transcript_sha256"}`
-        per design §6.1.
+        `{"image", "transcript", "doc_type", "sha256", "transcript_sha256",
+        "family", "severity"}` per design §6.1.
 
     Raises:
         ExportError: Either file is missing.
@@ -115,6 +120,12 @@ def manifest_record(image: Path, transcript: Path, doc_type: str) -> dict:
         # predictions verifies every image hash and scores garbage. Hashing the
         # transcript closes that for this change and every future one.
         "transcript_sha256": sha256_of(transcript),
+        # Stated on every record so a corpus is self-describing: a degraded page
+        # that cannot say what was done to it cannot be scored on identifying it.
+        # Keyword-only and required — a default would let a corpus ship silently
+        # mislabelled, and there is no value that is right for every caller.
+        "family": family,
+        "severity": severity,
     }
 
 
@@ -470,7 +481,11 @@ def export_corpus(
         source_image = _find_image(images_root, image_name, doc_type)
         source_transcript = transcripts_dir / (Path(image_name).stem + ".md")
 
-        row = manifest_record(source_image, source_transcript, doc_type)
+        # The clean export is the baseline the degraded tiers are compared
+        # against, and it is one of the seven classes a model must recognise —
+        # so it labels itself like any other corpus rather than being the one
+        # that stays silent.
+        row = manifest_record(source_image, source_transcript, doc_type, family="clean", severity="none")
         shutil.copy2(source_image, root / "images" / image_name)
         shutil.copy2(source_transcript, root / "transcripts" / source_transcript.name)
 
