@@ -61,7 +61,7 @@ _cba: &cba
   bank: Commonwealth Bank of Australia
   logo_text: Commonwealth Bank
   margin: 100
-  field_budgets:
+  field_budgets: &cba_budgets
     TRANSACTION_DESC: {width: 760, fit: wrap, min_font: 10, max_lines: 2}
     SUPPLIER_NAME: {width: 1600, fit: shrink, min_font: 12, max_lines: 1}
     # The licence footnote is one sentence that the page happens to break in
@@ -517,6 +517,13 @@ layouts:
 
   cba_date_grouped:
     <<: *cba
+    field_budgets:
+      <<: *cba_budgets
+      # Widened by exactly the 200px the dropped date column occupied:
+      # description now starts at the table's left edge instead of x: 200,
+      # and the debit column has not moved (x_right: -420). The 220px gap
+      # before it is unchanged.
+      TRANSACTION_DESC: {width: 960, fit: wrap, min_font: 10, max_lines: 2}
     font_sizes:
       header: 48
       body: 32
@@ -564,8 +571,7 @@ layouts:
         header_height: 72
         params: {opening_balance: true, opening_balance_label: "Opening Balance"}
         columns:
-          - {key: date, label: Date, align: left, x: 0}
-          - {key: description, label: Description, align: left, x: 200,
+          - {key: description, label: Description, align: left, x: 0,
              budget: TRANSACTION_DESC, field: TRANSACTION_DESCRIPTIONS}
           - {key: debit, label: Withdrawal, align: right, x_right: -420,
              field: TRANSACTION_AMOUNTS_PAID}
