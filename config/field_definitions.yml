@@ -144,10 +144,12 @@ field_types:
     - LINE_ITEM_TOTAL_PRICES
   date_list:
     - TRANSACTION_DATES
-  text_list:
-    - LINE_ITEM_DESCRIPTIONS
-    - TRANSACTION_DESCRIPTIONS
-    - LINE_ITEM_QUANTITIES
+  # `text_list` was removed on 2026-08-31. It named LINE_ITEM_DESCRIPTIONS,
+  # TRANSACTION_DESCRIPTIONS and LINE_ITEM_QUANTITIES, but free text has no
+  # checkable format, so nothing could ever read it — and every group here must
+  # be read by `validate`, or it is a claim the file cannot keep. That those
+  # three fields are pipe-delimited lists is already recorded, and enforced, by
+  # `parallel_field_groups` below.
   boolean:
     - IS_GST_INCLUDED
   abn:

@@ -269,20 +269,64 @@ def _balance_rule() -> dict:
     return rule
 
 
+def _check_list_elements(
+    case_id: str,
+    fields: dict,
+    field_names: set[str],
+    pattern: re.Pattern[str],
+    expectation: str,
+) -> list[str]:
+    """Check every element of a pipe-delimited list field against a format.
+
+    The list counterpart of the single-value `field_types.amount` and
+    `field_types.date` loops. `field_types.amount_list` and `date_list` were
+    declared and read by nothing, so four amount fields and one date field had
+    no format check at all — a thousands comma in a paid amount passed silently.
+
+    The element's INDEX is named, because these lists run to 24 entries and an
+    author given only the bad value has to hunt for it.
+
+    Args:
+        case_id: The entry's case id, named in every message.
+        fields: The entry's `fields` mapping.
+        field_names: Field names whose values are pipe-delimited lists.
+        pattern: The format every non-sentinel element must match.
+        expectation: How to describe that format in the message.
+
+    Returns:
+        One message per offending element. `NOT_FOUND` is always legal: it is
+        how the corpus says a column has no value on that row.
+    """
+    errors: list[str] = []
+    for field_name in sorted(field_names):
+        if field_name not in fields:
+            continue
+        for index, element in enumerate(str(fields[field_name]).split("|")):
+            value = element.strip()
+            if value == "NOT_FOUND" or pattern.match(value):
+                continue
+            errors.append(
+                f"{case_id}: field '{field_name}[{index}]' has value '{value}', expected {expectation}."
+            )
+    return errors
+
+
 def _check_balance_chain(case_id: str, fields: dict) -> list[str]:
     """Report any authored balance that does not follow from its amounts.
 
     Returns error strings rather than raising, matching `_check_gst` — a bad
     value in an authored entry is a finding to collect, not a startup failure.
 
-    An unparseable value in TRANSACTION_BALANCES or ACCOUNT_BALANCE is
-    reported here directly: neither field is in field_types.amount or
-    field_types.amount_list, so nothing else in `validate_entry` checks their
-    format, and a malformed value (e.g. a thousands separator) would
-    otherwise pass silently. TRANSACTION_AMOUNTS_PAID/RECEIVED are left to a
-    separate, not-yet-covered format check — this function still swallows an
-    unparseable value there rather than reporting it, to avoid pre-empting
-    that check once it exists.
+    An unparseable value in TRANSACTION_BALANCES is reported here directly,
+    because that field is in no `field_types` group and so no format check
+    reaches it — a thousands separator would otherwise pass silently.
+    ACCOUNT_BALANCE is also reported here, though `field_types.amount` already
+    covers it; the duplication is harmless and keeps this check readable as one
+    rule about one chain.
+
+    TRANSACTION_AMOUNTS_PAID and TRANSACTION_AMOUNTS_RECEIVED are NOT reported
+    here: `field_types.amount_list` covers them, so an unparseable value there
+    is swallowed rather than double-reported.
 
     Args:
         case_id: The entry's case id, named in every message.
@@ -469,6 +513,9 @@ def validate_entry(case_id: str, entry: dict) -> list[str]:
         date_range_fields = _field_type_group("date_range")
         abn_fields = _field_type_group("abn")
         amount_fields = _field_type_group("amount")
+        amount_list_fields = _field_type_group("amount_list")
+        date_list_fields = _field_type_group("date_list")
+        boolean_fields = _field_type_group("boolean")
     except SchemaError as exc:
         errors.append(str(exc))
         return errors
@@ -508,6 +555,30 @@ def validate_entry(case_id: str, entry: dict) -> list[str]:
                 errors.append(
                     f"{case_id}: field '{field_name}' has value '{val}', "
                     f"expected decimal without $ (e.g. '67.32')."
+                )
+
+    errors.extend(
+        _check_list_elements(
+            case_id, fields, amount_list_fields, _AMOUNT_RE, "decimal without $ (e.g. '67.32')"
+        )
+    )
+    errors.extend(
+        _check_list_elements(case_id, fields, date_list_fields, _DATE_RE, "DD/MM/YYYY (e.g. '15/03/2024')")
+    )
+
+    # Accepts what `_check_gst` accepts. That reads the value as
+    # `str(...).strip().lower() != "true"`, so YAML's bare `true` and the quoted
+    # string 'true' both work — and the corpus authors it both ways today, 6
+    # entries as a YAML boolean against 122 as a string. This check is therefore
+    # deliberately not stricter than the consumer: it rejects 'yes' and '1' and
+    # typos, not a spelling the rest of the pipeline already honours.
+    for field_name in sorted(boolean_fields):
+        if field_name in fields:
+            val = str(fields[field_name]).strip().lower()
+            if val not in ("true", "false"):
+                errors.append(
+                    f"{case_id}: field '{field_name}' has value '{fields[field_name]}', "
+                    f"expected true or false."
                 )
 
     for group in _parallel_groups(doc_type):
