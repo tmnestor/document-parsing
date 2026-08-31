@@ -16,6 +16,7 @@ import json
 from pathlib import Path
 
 _MATRIX_NAME = "matrix.jsonl"
+_GROUND_TRUTH_NAME = "ground_truth.jsonl"
 
 
 class MatrixError(RuntimeError):
@@ -110,5 +111,109 @@ def write_matrix(rows: list[dict], exports_dir: Path) -> Path:
             )
 
     path = exports_dir / _MATRIX_NAME
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    return path
+
+
+def ground_truth_rows(corpus_dir: Path) -> list[dict]:
+    """One labelled row per image in a corpus, for the identification task.
+
+    Everything is read from the corpus's own manifest -- the page list AND the
+    labels. The labels are deliberately not parameters: they already live on
+    every manifest record, and taking them from the caller instead would create
+    two representations of one fact that could silently disagree.
+
+    Args:
+        corpus_dir: An exported or degraded corpus holding `manifest.jsonl`.
+
+    Returns:
+        One dict per image, keyed `corpus`, `image`, `transcript`, `case_id`,
+        `doc_type`, `family`, `severity`. `transcript` rides along because a
+        degraded page's transcription label is the clean transcript, so one file
+        serves both the identification and transcription tasks.
+
+    Raises:
+        MatrixError: The directory holds no manifest, or a record predates the
+            labels.
+    """
+    manifest = corpus_dir / "manifest.jsonl"
+    if not manifest.exists():
+        raise _err(
+            f"{manifest.name} does not exist, so {corpus_dir.name} is not an export.",
+            path=corpus_dir.resolve(),
+            key="manifest.jsonl",
+            expected="a directory written by `export` or by `degrade`, holding images/, "
+            "transcripts/ and manifest.jsonl.",
+            recover="run `python -m generators.pipeline export` first, or drop this "
+            "directory from the run.",
+        )
+
+    rows = []
+    for line in manifest.read_text(encoding="utf-8").splitlines():
+        if not line:
+            continue
+        record = json.loads(line)
+
+        missing = [key for key in ("family", "severity") if key not in record]
+        if missing:
+            raise _err(
+                f"a record in {corpus_dir.name}/manifest.jsonl has no "
+                f"{', '.join(missing)}, so the page cannot be labelled.",
+                path=manifest.resolve(),
+                key=", ".join(missing),
+                expected="every manifest record to carry family and severity, e.g.\n"
+                '              {"image": "images/CASE001_invoices.png", '
+                '"family": "scan", "severity": "moderate", ...}',
+                recover="re-run `export` and `degrade` with the current code; a corpus "
+                "written before 2026-09-01 predates these fields.",
+            )
+
+        doc_type = str(record["doc_type"])
+        stem = Path(record["image"]).stem
+        # Filenames are {case_id}_{doc_type}; strip the suffix rather than
+        # splitting on "_", which would truncate `bank_statements`.
+        suffix = f"_{doc_type}"
+        case_id = stem[: -len(suffix)] if stem.endswith(suffix) else stem
+        rows.append(
+            {
+                "corpus": corpus_dir.name,
+                "image": record["image"],
+                "transcript": record["transcript"],
+                "case_id": case_id,
+                "doc_type": doc_type,
+                "family": record["family"],
+                "severity": record["severity"],
+            }
+        )
+    return rows
+
+
+def write_ground_truth(rows: list[dict], exports_dir: Path) -> Path:
+    """Write the pooled identification ground truth beside the matrix.
+
+    Args:
+        rows: Rows from `ground_truth_rows`, in the order they should be listed.
+        exports_dir: The directory holding the corpora and `matrix.jsonl`.
+
+    Returns:
+        The path written.
+
+    Raises:
+        MatrixError: No row describes the clean baseline.
+    """
+    if not any(row["family"] == "clean" for row in rows):
+        raise _err(
+            "no row has family 'clean', so the set has no undegraded baseline and a "
+            "model cannot be scored on recognising one.",
+            path=exports_dir.resolve(),
+            key=_GROUND_TRUTH_NAME,
+            expected="rows covering every corpus INCLUDING the clean export, e.g.\n"
+            '              {"corpus": "parsing_20260901", "family": "clean", '
+            '"severity": "none", ...}',
+            recover="include the clean corpus in the run; without it 'clean' is a class "
+            "no page demonstrates.",
+        )
+
+    path = exports_dir / _GROUND_TRUTH_NAME
     path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
     return path
