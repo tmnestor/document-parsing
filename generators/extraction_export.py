@@ -5,6 +5,11 @@ The fourth projection of one truth, alongside `serialise`'s Markdown,
 nothing and runs no extractor: this repository emits IE ground truth and
 leaves extraction to whoever consumes it.
 
+It emits two grains. `ground_truth.{jsonl,csv}` is one row per document.
+`line_items.jsonl` is one row per line item — per bank transaction, invoice
+line or receipt line — and joins back to the document-level file by
+`case_id`.
+
 **Why the columns come from `field_definitions.yml`.** `all_columns` is
 documented there as "the union of the three document_fields lists above, in
 the order the derived CSV writes them" — this file is that CSV's writer. The
@@ -141,7 +146,8 @@ def export_extraction(
         ExtractionExportError: A case is in the ground truth but not the
             corpus, or vice versa.
     """
-    columns = yaml.safe_load(field_definitions.read_text(encoding="utf-8"))["all_columns"]
+    definitions = yaml.safe_load(field_definitions.read_text(encoding="utf-8"))
+    columns = definitions["all_columns"]
 
     manifest = [
         json.loads(line)
@@ -151,8 +157,11 @@ def export_extraction(
     in_corpus = {Path(row["image"]).stem for row in manifest}
 
     rows: list[dict] = []
+    item_rows: list[dict] = []
     for path in sorted(ground_truth_dir.glob("*.yml")):
-        rows += extraction_rows(load_ground_truth(path), columns, path.stem)
+        entries = load_ground_truth(path)
+        rows += extraction_rows(entries, columns, path.stem)
+        item_rows += line_item_rows(entries, path.stem, definitions)
 
     in_rows = {Path(row["image"]).stem for row in rows}
     if in_rows != in_corpus:
@@ -185,5 +194,14 @@ def export_extraction(
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
+
+    # JSONL only, deliberately. A row's columns differ per document type -- a
+    # statement has TRANSACTION_BALANCE where an invoice has LINE_ITEM_QUANTITY
+    # -- and JSONL rows need not share keys, so the two coexist in one file.
+    # CSV would need a fixed header, forcing either one sparse table implying a
+    # schema that does not exist, or a file per type.
+    with (root / "line_items.jsonl").open("w", encoding="utf-8") as handle:
+        for row in item_rows:
+            handle.write(json.dumps(row) + "\n")
 
     return root
