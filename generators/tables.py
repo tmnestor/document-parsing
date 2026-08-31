@@ -120,10 +120,15 @@ def carry_group_key_down(
     transcribes, taken deliberately so that every row is self-contained.
 
     A group header is a row whose first cell has content and whose other cells
-    are all empty. A trailing header with nothing beneath it is kept — dropping
-    it would lose the only record that the date was on the page at all. A blank
-    first cell with no date anywhere above it stays blank: an opening-balance
-    row genuinely predates the first group, and there is nothing to carry.
+    are all empty. Where the table has a column to carry into, the header's key
+    is copied onto every row of its group and the header row itself is dropped.
+    Where it has none -- no row ever presents a blank first cell -- the band
+    stays exactly where it occurred, as its own row. That is the second limb of
+    one rule, not a second rule: see
+    docs/superpowers/specs/2026-08-31-date-bands-without-a-date-column-design.md
+    §3. A blank first cell with no date anywhere above it stays blank: an
+    opening-balance row genuinely predates the first group, and there is nothing
+    to carry.
 
     Args:
         rows: (cells, was_header) per captured row, in order.
@@ -132,8 +137,12 @@ def carry_group_key_down(
         The rows with the group key carried onto every row of its group.
     """
     carried: list[tuple[list[Cell], bool]] = []
-    pending: tuple[list[Cell], bool] | None = None
-    pending_used = False
+    # Index in `carried` of a band no row has carried from yet. The band is
+    # appended where it occurs and REMOVED if a row later takes its key, rather
+    # than held back and flushed later: holding it back put each band after the
+    # rows it heads whenever nothing carried, which is every table that has no
+    # column to carry into.
+    pending_index: int | None = None
     last_key = ""
 
     for cells, was_header in rows:
@@ -145,11 +154,8 @@ def carry_group_key_down(
             bool(cells) and bool(cells[0].text.strip()) and not any(cell.text.strip() for cell in cells[1:])
         )
         if is_group_header:
-            # A header that headed nothing is kept rather than lost: it is the
-            # only record that the date was on the page.
-            if pending is not None and not pending_used:
-                carried.append(pending)
-            pending, pending_used = (cells, was_header), False
+            carried.append((cells, was_header))
+            pending_index = len(carried) - 1
             last_key = cells[0].text
             continue
 
@@ -159,14 +165,15 @@ def carry_group_key_down(
                 # whatever span the blank cell had, so a merged column stays
                 # merged when its text is filled in.
                 cells = [cells[0]._replace(text=last_key), *cells[1:]]
-                if pending is not None:
-                    pending_used = True
+                if pending_index is not None:
+                    # The band was consumed: its date now stands on this row, so
+                    # the band row itself would be a duplicate.
+                    del carried[pending_index]
+                    pending_index = None
         elif cells:
             last_key = cells[0].text
         carried.append((cells, was_header))
 
-    if pending is not None and not pending_used:
-        carried.append(pending)
     return carried
 
 
