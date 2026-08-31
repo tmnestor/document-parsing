@@ -196,3 +196,19 @@ balance_consistency:
   paid_field: TRANSACTION_AMOUNTS_PAID
   received_field: TRANSACTION_AMOUNTS_RECEIVED
   closing_field: ACCOUNT_BALANCE
+
+# The singular name each parallel field takes in line_items.jsonl, where a
+# row holds ONE value. A row reading `TRANSACTION_DATES: 01/09/2023` would
+# misstate its own grain. Every field in every parallel_field_groups entry must
+# appear here; a group field with no mapping is a startup error, so a newly
+# grouped field cannot ship un-named.
+line_item_column_names:
+  TRANSACTION_DATES: TRANSACTION_DATE
+  TRANSACTION_DESCRIPTIONS: TRANSACTION_DESCRIPTION
+  TRANSACTION_AMOUNTS_PAID: TRANSACTION_AMOUNT_PAID
+  TRANSACTION_AMOUNTS_RECEIVED: TRANSACTION_AMOUNT_RECEIVED
+  TRANSACTION_BALANCES: TRANSACTION_BALANCE
+  LINE_ITEM_DESCRIPTIONS: LINE_ITEM_DESCRIPTION
+  LINE_ITEM_QUANTITIES: LINE_ITEM_QUANTITY
+  LINE_ITEM_PRICES: LINE_ITEM_PRICE
+  LINE_ITEM_TOTAL_PRICES: LINE_ITEM_TOTAL_PRICE

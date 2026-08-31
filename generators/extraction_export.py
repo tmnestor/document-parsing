@@ -57,6 +57,66 @@ def extraction_rows(ground_truth: dict[str, dict], columns: list[str], doc_type:
     return rows
 
 
+def line_item_rows(ground_truth: dict[str, dict], doc_type: str, definitions: dict) -> list[dict]:
+    """Explode each case's parallel field lists into one row per line item.
+
+    The group is looked up by the entry's own authored `DOCUMENT_TYPE`, exactly
+    as `validate` does before checking the same lists (generators/schema.py:317),
+    so no document type is named here.
+
+    Args:
+        ground_truth: Entries keyed by case id, as `load_ground_truth` returns.
+        doc_type: The document type key, e.g. "bank_statements".
+        definitions: The parsed `field_definitions.yml`.
+
+    Returns:
+        One dict per line item, keyed `case_id`, `doc_type`, `image`, `line_no`,
+        then the singularised group columns. A case whose group fields are absent
+        or wholly `NOT_FOUND` contributes no rows.
+
+    Raises:
+        ExtractionExportError: A group field has no `line_item_column_names` entry.
+    """
+    names = definitions["line_item_column_names"]
+    groups = definitions["parallel_field_groups"]
+    rows: list[dict] = []
+
+    for case_id in sorted(ground_truth):
+        fields = ground_truth[case_id].get("fields", {})
+        for group in groups.get(str(fields.get("DOCUMENT_TYPE", "")), []):
+            unmapped = [field for field in group if field not in names]
+            if unmapped:
+                raise ExtractionExportError(
+                    "Cannot write the line-item export: a grouped field has no column name.\n"
+                    f"  What:     {', '.join(unmapped)} appear in parallel_field_groups but "
+                    "not in line_item_column_names, so an exploded row would have no name "
+                    "for that column.\n"
+                    "  Where:    config/field_definitions.yml, under "
+                    "'line_item_column_names:'\n"
+                    "  Expected: one singular name per grouped field, e.g.\n"
+                    "              line_item_column_names:\n"
+                    "                TRANSACTION_DATES: TRANSACTION_DATE\n"
+                    f"  Recover:  add {', '.join(unmapped)} to that block."
+                )
+
+            values = {field: str(fields.get(field, SENTINEL)).split("|") for field in group}
+            width = len(next(iter(values.values())))
+            if width == 1 and all(v[0].strip() == SENTINEL for v in values.values()):
+                continue
+
+            for index in range(width):
+                row = {
+                    "case_id": case_id,
+                    "doc_type": doc_type,
+                    "image": f"{case_id}_{doc_type}.png",
+                    "line_no": index,
+                }
+                for field in group:
+                    row[names[field]] = values[field][index].strip()
+                rows.append(row)
+    return rows
+
+
 def export_extraction(
     *,
     corpus: Path,
