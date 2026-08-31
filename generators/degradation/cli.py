@@ -36,7 +36,12 @@ from rich import print as rprint
 from rich.progress import Progress
 
 from generators.degradation import degrade_page, load_tiers, page_seed
-from generators.degradation.matrix import matrix_row, write_matrix
+from generators.degradation.matrix import (
+    ground_truth_rows,
+    matrix_row,
+    write_ground_truth,
+    write_matrix,
+)
 from generators.degradation.tiers import load_corpus_selection
 from generators.export import manifest_record
 from generators.loader import load_generation_config
@@ -262,6 +267,17 @@ def degrade(
     )
     matrix_path = write_matrix(rows, plan.out)
     rprint(f"[green]Matrix written: {matrix_path} ({len(rows)} corpora)[/green]")
+
+    # The pooled index for the identification task. Built from the same seven
+    # corpora the matrix names, and written beside it because it is the same kind
+    # of thing: an index spanning corpora rather than describing one. Each row
+    # also names the transcript, so a consumer scoring identification and
+    # transcription reads one file rather than joining three.
+    gt_rows = ground_truth_rows(corpus)
+    for tier in tiers:
+        gt_rows.extend(ground_truth_rows(plan.out / f"{corpus.name}_{tier.family}-{tier.name}"))
+    gt_path = write_ground_truth(gt_rows, plan.out)
+    rprint(f"[green]Ground truth written: {gt_path} ({len(gt_rows)} page(s))[/green]")
 
 
 def _note(corpus: Path, tier, pages: int) -> str:
