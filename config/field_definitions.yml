@@ -47,6 +47,7 @@ document_fields:
     - TRANSACTION_DESCRIPTIONS
     - TRANSACTION_AMOUNTS_PAID
     - TRANSACTION_AMOUNTS_RECEIVED
+    - TRANSACTION_BALANCES
     - ACCOUNT_BALANCE
     - PAYER_NAME
 
@@ -83,6 +84,12 @@ document_fields:
 # The union of the three document_fields lists above, in the order the
 # derived CSV writes them. Nothing else belongs here: a column no surviving
 # type declares would be a NOT_FOUND column on every row of the corpus.
+#
+# TRANSACTION_BALANCES is deliberately absent even though document_fields
+# above now requires it: adding it here would change the shipped
+# document-level ground_truth.{jsonl,csv} for every consumer, and the running
+# balance is per-line data — it lives in line_items.jsonl instead, one value
+# per TRANSACTION_BALANCE row.
 all_columns:
   - DOCUMENT_TYPE
   - SUPPLIER_NAME
@@ -191,6 +198,13 @@ gst_consistency:
 # computes exactly — quantizing would be a no-op at best, and at worst would
 # mask a stray 3dp authoring error by rounding it away. Decimal equality is
 # already numeric, not textual: 3896.620 == 3896.62 with no rounding needed.
+#
+# The authored value is signed (a negative balance is a plain leading '-',
+# e.g. "-2000.12") everywhere this rule and line_items.jsonl read it — that is
+# the ground truth. Some layouts instead render a negative balance on the
+# page as an unsigned amount with a DR/CR suffix (e.g. "$2,000.12 DR"). That
+# rendering is a per-layout convention, not part of this rule, and it is not
+# recoverable from any file the scoring repository receives.
 balance_consistency:
   balances_field: TRANSACTION_BALANCES
   paid_field: TRANSACTION_AMOUNTS_PAID

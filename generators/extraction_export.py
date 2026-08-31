@@ -138,6 +138,23 @@ def line_item_rows(ground_truth: dict[str, dict], doc_type: str, definitions: di
                 )
 
             values = {field: str(fields.get(field, SENTINEL)).split("|") for field in group}
+            lengths = {field: len(v) for field, v in values.items()}
+            if len(set(lengths.values())) > 1:
+                raise ExtractionExportError(
+                    "Cannot write the line-item export: a case's parallel group has "
+                    "mismatched lengths.\n"
+                    f"  What:     {case_id}'s fields in group {group} do not all carry the "
+                    f"same number of pipe-delimited items: {lengths}.\n"
+                    f"  Where:    ground_truth/{doc_type}.yml, entry '{case_id}', "
+                    "under 'fields:'.\n"
+                    "  Expected: every field in one parallel_field_groups entry to have the "
+                    "same item count, e.g. two dates alongside two balances rather than two "
+                    "dates alongside one.\n"
+                    "  Recover:  run `python -m generators.pipeline validate` — it reports "
+                    f"this as a pipe-delimited field count mismatch for {case_id} — and fix "
+                    "the offending field before re-exporting."
+                )
+
             width = len(next(iter(values.values())))
             if width == 1 and all(v[0].strip() == SENTINEL for v in values.values()):
                 continue

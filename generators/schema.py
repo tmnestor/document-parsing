@@ -274,19 +274,24 @@ def _check_balance_chain(case_id: str, fields: dict) -> list[str]:
 
     Returns error strings rather than raising, matching `_check_gst` — a bad
     value in an authored entry is a finding to collect, not a startup failure.
-    Every value is parsed defensively: a malformed or empty pipe segment
-    (e.g. an entry hand-edited to "50.00||30.00") must not crash `validate`,
-    since the amount-format checks elsewhere in `validate_entry` already
-    report a bad value on their own pass.
+
+    An unparseable value in TRANSACTION_BALANCES or ACCOUNT_BALANCE is
+    reported here directly: neither field is in field_types.amount or
+    field_types.amount_list, so nothing else in `validate_entry` checks their
+    format, and a malformed value (e.g. a thousands separator) would
+    otherwise pass silently. TRANSACTION_AMOUNTS_PAID/RECEIVED are left to a
+    separate, not-yet-covered format check — this function still swallows an
+    unparseable value there rather than reporting it, to avoid pre-empting
+    that check once it exists.
 
     Args:
         case_id: The entry's case id, named in every message.
         fields: The entry's `fields` mapping.
 
     Returns:
-        One message per broken link, plus one if the chain does not end at the
-        closing balance. Empty when the statement is consistent, carries no
-        balances field at all, or any value fails to parse as a decimal.
+        One message per unparseable balance/closing value, one per broken
+        link, and one if the chain does not end at the closing balance. Empty
+        when the statement is consistent or carries no balances field at all.
     """
     rule = _balance_rule()
     if rule["balances_field"] not in fields:
@@ -296,15 +301,37 @@ def _check_balance_chain(case_id: str, fields: dict) -> list[str]:
         text = str(value).strip()
         return Decimal("0") if text == "NOT_FOUND" else Decimal(text)
 
+    errors: list[str] = []
+    balances: list[Decimal] = []
+    for position, raw in enumerate(str(fields[rule["balances_field"]]).split("|")):
+        try:
+            balances.append(amount(raw))
+        except InvalidOperation:
+            errors.append(
+                f"{case_id}: {rule['balances_field']}[{position}] is {raw!r}, which is not a "
+                f"plain decimal (no thousands separators, no currency symbol). "
+                f"Fix that value in {rule['balances_field']}."
+            )
+
+    closing_raw = str(fields[rule["closing_field"]])
     try:
-        balances = [amount(v) for v in str(fields[rule["balances_field"]]).split("|")]
+        closing = amount(closing_raw)
+    except InvalidOperation:
+        errors.append(
+            f"{case_id}: {rule['closing_field']} is {closing_raw!r}, which is not a plain "
+            f"decimal (no thousands separators, no currency symbol). Fix that value."
+        )
+        closing = None
+
+    if errors:
+        return errors  # a malformed balance/closing value makes the rest of the chain unverifiable
+
+    try:
         paid = [amount(v) for v in str(fields[rule["paid_field"]]).split("|")]
         received = [amount(v) for v in str(fields[rule["received_field"]]).split("|")]
-        closing = amount(str(fields[rule["closing_field"]]))
     except InvalidOperation:
-        return []  # the amount-format check elsewhere already reports this
+        return []  # swallowed: see the docstring note on PAID/RECEIVED above
 
-    errors: list[str] = []
     for index in range(1, len(balances)):
         if index >= len(paid) or index >= len(received):
             break  # the parallel-group count check elsewhere already reports this
