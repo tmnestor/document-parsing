@@ -47,30 +47,41 @@ def _rows(manifest: Path) -> dict[str, dict]:
     return rows
 
 
-def _fingerprint(manifest: Path) -> tuple[int, str]:
-    """One digest over a whole corpus's hashes: page count, and a hash of hashes.
+def _fingerprint(manifest: Path) -> tuple[int, str, str]:
+    """Two digests over a corpus's hashes: one for images, one for transcripts.
 
     For comparing two machines that cannot exchange files. The sandbox this was
     written for has no rsync and no scp -- transfer is a browser upload -- so a
     corpus's identity has to fit in a line somebody can paste. Equal digests mean
-    every image AND every transcript in that corpus is byte-identical; unequal
-    means at least one differs, and only then is a file worth moving.
+    every image (or transcript) in that corpus is byte-identical; unequal means
+    at least one differs, and only then is a file worth moving.
+
+    **They are reported separately because the two answer different questions.**
+    Images differing while transcripts match localises the cause to rendering --
+    font rasterisation, or the degradation stack's SIMD paths. Transcripts
+    differing means the page CONTENT differs, which is a far more serious result:
+    the ground truth itself is not reproducible, and no amount of re-rendering
+    fixes it. One combined digest cannot tell those apart.
 
     Sorted by stem so the digest describes the corpus rather than the order its
     manifest happens to be written in.
     """
     rows = _rows(manifest)
-    material = "".join(
-        f"{stem}\0{rows[stem]['sha256']}\0{rows[stem].get('transcript_sha256', '')}\n"
-        for stem in sorted(rows)
+    stems = sorted(rows)
+    images = "".join(f"{s}\0{rows[s]['sha256']}\n" for s in stems)
+    texts = "".join(f"{s}\0{rows[s].get('transcript_sha256', '')}\n" for s in stems)
+    return (
+        len(rows),
+        hashlib.sha256(images.encode("utf-8")).hexdigest(),
+        hashlib.sha256(texts.encode("utf-8")).hexdigest(),
     )
-    return len(rows), hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
 def _print_fingerprints(root: Path) -> int:
+    print(f"{'corpus':34} {'pages':>5}  {'images':<18} {'transcripts':<18}")
     for name, manifest in sorted(_manifests(root).items()):
-        pages, digest = _fingerprint(manifest)
-        print(f"{name:34} {pages:>5}  {digest}")
+        pages, images, texts = _fingerprint(manifest)
+        print(f"{name:34} {pages:>5}  {images[:16]}   {texts[:16]}")
     return 0
 
 
