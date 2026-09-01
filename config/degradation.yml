@@ -35,6 +35,17 @@
 # generators/degradation/effects.py and
 # docs/superpowers/specs/2026-09-01-cross-machine-determinism-design.md.
 #
+# ORDER WITHIN A PHASE IS LOAD-BEARING TOO, and this is easy to miss because it
+# reads as cosmetic. Every effect in a tier's `ink:` and `paper:` lists draws
+# from ONE generator, seeded once per page and passed down the list in order --
+# see `apply_effects` in generators/degradation/augment.py. So swapping two
+# entries does not merely reorder two operations: the second entry now consumes
+# the draws the first one used to, and every sampled parameter after it shifts.
+# The page comes out different in every pixel. Under Augraphy each augmentation
+# carried its own state and this was safe; it is not safe now. Reordering a
+# phase is a corpus revision, exactly like changing a number in it. Pinned by
+# tests/test_degradation_augment.py.
+#
 # ROLLER STREAKS AND FOLD RIDGES ARE ALSO THIS PROJECT'S OWN. Augraphy's
 # `Folding` and `DirtyRollers` produced exactly the artefacts this study wants
 # but were not seedable — five runs at one seed gave five different images,

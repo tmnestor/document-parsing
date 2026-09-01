@@ -16,7 +16,12 @@ dependencies:
       - PyYAML==6.0.3
       - typer==0.27.1
       - rich==14.3.0
-      - faker
+      # Faker lands on the page: it supplies the names, addresses and
+      # references the renderer draws AND the transcript records, so a version
+      # that changes a provider changes the ground truth, not just a pixel. It
+      # was the last unpinned input; the two machines agreeing was a
+      # coincidence of install date, not a pin.
+      - faker==40.37.0
 
       # Degradation (generators/degradation/). numpy and opencv are the only
       # runtime dependencies the re-derived ink, paper, geometry and camera
