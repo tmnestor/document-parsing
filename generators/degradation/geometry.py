@@ -27,7 +27,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageEnhance
 
-from .kernels import box_blur, radius_for_sigma
+from .kernels import blur_sigma
 
 # The OpenCV the degraded corpora were built with. `warpPerspective` and
 # `GaussianBlur` are not bit-stable across major versions, so this is corpus
@@ -76,6 +76,20 @@ def check_opencv() -> None:
     )
 
 
+# Beyond this the truncated series stops being a cosine. It is a hard limit,
+# not a preference: the terms carried give an error of about theta^8/8!, which
+# is 3e-10 at the widest rotation the corpus declares (+/-14 degrees), 1e-7 at
+# this bound, and 9e-4 at a quarter turn -- where the series would quietly
+# report cos(90 degrees) as -0.0009 instead of 0. Every caller here rotates a
+# page by a degree or two, so the bound is generous by more than an order of
+# magnitude; a caller that needs a quarter turn wants a transpose, not this.
+_MAX_SERIES_RADIANS = 0.5
+
+
+class RotationDomainError(ValueError):
+    """Raised when a rotation is too large for the portable series."""
+
+
 def _cos_sin(theta: float) -> tuple[float, float]:
     """Cosine and sine by series, identical on every machine.
 
@@ -85,7 +99,32 @@ def _cos_sin(theta: float) -> tuple[float, float]:
     seventh-order series is accurate to 3e-10 radians, far below a pixel,
     and uses only `+ - * /`, which the standard requires to be correctly
     rounded everywhere.
+
+    Args:
+        theta: Angle in radians; must satisfy `|theta| <= 0.5` (about 28.6
+            degrees), the domain over which the truncated series holds.
+
+    Returns:
+        `(cos(theta), sin(theta))`.
+
+    Raises:
+        RotationDomainError: `theta` is outside the series' domain.
     """
+    if not -_MAX_SERIES_RADIANS <= theta <= _MAX_SERIES_RADIANS:
+        raise RotationDomainError(
+            "Rotation is outside the portable series' domain.\n"
+            f"  What:     _cos_sin was asked for theta={theta:.6f} rad "
+            f"({float(np.degrees(theta)):.3f} deg), beyond the "
+            f"+/-{_MAX_SERIES_RADIANS} rad the seventh-order series holds to. It would "
+            "return a wrong answer rather than fail -- at a quarter turn it reports "
+            "cos as -0.0009 instead of 0.\n"
+            "  Where:    config/degradation.yml -> families.<family>.tiers[<tier>]"
+            ".geometry.rotation_deg\n"
+            "  Expected: |rotation_deg| well under 28.6, e.g.\n"
+            "              rotation_deg: [-2.5, 2.5]\n"
+            "  Recover:  bring rotation_deg back inside that range; a page photographed "
+            "or fed at a quarter turn is a different effect, not a larger skew."
+        )
     squared = theta * theta
     cos = 1.0 - squared / 2.0 + squared * squared / 24.0 - squared * squared * squared / 720.0
     sin = theta * (1.0 - squared / 6.0 + squared * squared / 120.0 - squared * squared * squared / 5040.0)
@@ -98,6 +137,68 @@ def _rot(point: list[float], cx: float, cy: float, degrees: float) -> list[float
     cos, sin = _cos_sin(float(theta))
     x, y = point[0] - cx, point[1] - cy
     return [cx + x * cos - y * sin, cy + x * sin + y * cos]
+
+
+def _rotation_affine(width: int, height: int, degrees: float) -> tuple[float, ...]:
+    """PIL's inverse affine for a rotation about the centre, built without libm.
+
+    `Image.rotate` looks like a pure resample, but it assembles this same matrix
+    in Python with `math.cos`/`math.sin` before handing it to `Image.transform`
+    -- so every page in the `scan` family used to rotate through the platform's
+    libm. Reproducing the matrix here with `_cos_sin` and calling `transform`
+    directly is the same operation with a portable angle.
+
+    PIL's `AFFINE` data is the INVERSE mapping, output pixel to input pixel:
+    `x_in = a*x_out + b*y_out + c`, `y_in = d*x_out + e*y_out + f`. Rotating the
+    OUTPUT by `+degrees` therefore means rotating the sample point by
+    `-degrees`, which is the sign `Image.rotate` applies before doing exactly
+    this.
+
+    Args:
+        width: Frame width in pixels.
+        height: Frame height in pixels.
+        degrees: Counter-clockwise rotation of the image content.
+
+    Returns:
+        The six-tuple `(a, b, c, d, e, f)` for `Image.Transform.AFFINE`.
+    """
+    cos, sin = _cos_sin(float(np.radians(-degrees)))
+    cx, cy = width / 2.0, height / 2.0
+    a, b = cos, sin
+    d, e = -sin, cos
+    # Rotate about the origin, then put the centre back where it was.
+    c = a * -cx + b * -cy + cx
+    f = d * -cx + e * -cy + cy
+    return (a, b, c, d, e, f)
+
+
+def _normal(rng: np.random.Generator, shape: tuple[int, ...], sigma: float) -> np.ndarray:
+    """Gaussian-shaped noise from uniforms only.
+
+    `rng.normal` uses NumPy's ziggurat, which falls back to `log1p` on its
+    tail branch and `exp` on its wedge branch -- both the platform's libm,
+    which is what this corpus cannot depend on. The tail is entered about
+    2.6e-4 of the time, and a full-frame draw is tens of millions of samples,
+    so thousands of libm-dependent decisions land on every degraded page and
+    one flipped comparison desynchronises the whole remaining stream.
+
+    Six uniforms summed have variance 1/2, so scaling by sqrt(2) gives unit
+    variance; `sqrt` is IEEE-exact. Excess kurtosis is -0.2, invisible at the
+    sigmas this corpus declares (1 to 10), and unlike a truncated lookup table
+    it keeps a real tail and needs no committed constants.
+
+    Args:
+        rng: Seeded generator; the only source of randomness.
+        shape: Shape to draw; `()` for a scalar.
+        sigma: Standard deviation of the result.
+
+    Returns:
+        A float64 array of `shape`, zero-mean with standard deviation `sigma`.
+    """
+    total = rng.random(shape)
+    for _ in range(5):
+        total += rng.random(shape)
+    return (total - 3.0) * (np.sqrt(2.0) * sigma)
 
 
 def skew_on_platen(image: Image.Image, geometry: dict, rng: np.random.Generator) -> Image.Image:
@@ -128,16 +229,23 @@ def skew_on_platen(image: Image.Image, geometry: dict, rng: np.random.Generator)
     # scanner lamp leaves at the edges of its travel.
     level = rng.uniform(232, 250)
     bed = np.ones((h + 2 * pad_y, w + 2 * pad_x, 3)) * level
-    bed += rng.normal(0, 1.5, bed.shape)
+    bed += _normal(rng, bed.shape, 1.5)
     canvas = Image.fromarray(np.clip(bed, 0, 255).astype(np.uint8), "RGB")
     canvas.paste(page, (pad_x, pad_y))
 
     rot_lo, rot_hi = geometry["rotation_deg"]
     degrees = rng.uniform(rot_lo, rot_hi)
-    return canvas.rotate(
-        degrees,
+    # `canvas.rotate(...)` would be the obvious call and is the one this
+    # replaces: PIL builds the affine matrix in Python with math.cos/math.sin
+    # before resampling, so the whole scan family would rotate through libm.
+    # `_rotation_affine` is that same matrix from the portable series; the
+    # transform is PIL's own, unchanged, and keeps expand=False by asking for
+    # the canvas's own size back.
+    return canvas.transform(
+        canvas.size,
+        Image.Transform.AFFINE,
+        _rotation_affine(canvas.width, canvas.height, float(degrees)),
         resample=Image.Resampling.BICUBIC,
-        expand=False,
         fillcolor=(int(level), int(level), int(level)),
     )
 
@@ -168,7 +276,7 @@ def warp_to_photo(image: Image.Image, geometry: dict, rng: np.random.Generator) 
     bg = np.ones((ch, cw, 3)) * base
     gx = np.linspace(rng.uniform(-25, 0), rng.uniform(0, 25), cw)[None, :, None]
     gy = np.linspace(rng.uniform(-20, 0), rng.uniform(0, 20), ch)[:, None, None]
-    bg = np.clip(bg + gx + gy + rng.normal(0, 3, (ch, cw, 3)), 0, 255)
+    bg = np.clip(bg + gx + gy + _normal(rng, (ch, cw, 3), 3.0), 0, 255)
 
     # Destination quad: foreshorten one edge, then rotate the whole page.
     fore_lo, fore_hi = geometry["foreshorten"]
@@ -211,10 +319,11 @@ def warp_to_photo(image: Image.Image, geometry: dict, rng: np.random.Generator) 
 
     # Drop shadow under the page.
     # OpenCV's kernel construction uses std::exp, which is not portable across
-    # platforms (glibc vs Apple libm differ in the last bits). A three-pass box
-    # cascade approximates a Gaussian using only integer arithmetic.
+    # platforms (glibc vs Apple libm differ in the last bits). `blur_sigma`
+    # reaches the same variance with box cascades and a 3-tap, using only
+    # `+ - * /`.
     sigma = max(w, h) * 0.02
-    shadow = box_blur(warped[:, :, 3], radius_for_sigma(sigma)) * 0.45
+    shadow = blur_sigma(warped[:, :, 3], sigma) * 0.45
     offset = int(max(w, h) * 0.015)
     shadow = np.roll(np.roll(shadow, offset, axis=0), offset, axis=1)[:, :, None] / 255.0
     bg = bg * (1 - shadow) + np.array([25, 22, 20]) * shadow
@@ -269,7 +378,7 @@ def roller_streaks(image: Image.Image, spec: dict, rng: np.random.Generator) -> 
 
         # A faint full-height jitter alongside, so the band is not perfectly
         # uniform down the page — the roller wobbles.
-        wobble = rng.normal(0, strength * 12.0, (height, 1, 1))
+        wobble = _normal(rng, (height, 1, 1), strength * 12.0)
         arr[:, x : x + band, :] = np.clip(arr[:, x : x + band, :] + wobble, 0, 255)
 
     return Image.fromarray(arr.astype(np.uint8), "RGB")
@@ -304,7 +413,7 @@ def fold_ridges(image: Image.Image, spec: dict, rng: np.random.Generator) -> Ima
     # Spread the folds over the page rather than placing them independently: a
     # sheet folded twice creates evenly spaced creases, not two at random.
     for index in range(folds):
-        centre = int(height * (index + 1) / (folds + 1) + rng.normal(0, height * 0.02))
+        centre = int(height * (index + 1) / (folds + 1) + float(_normal(rng, (), height * 0.02)))
         centre = int(np.clip(centre, 1, height - 2))
 
         strength_lo, strength_hi = spec["strength"]
@@ -400,19 +509,20 @@ def apply_photometrics(image: Image.Image, camera: dict, rng: np.random.Generato
     frame = ImageEnhance.Contrast(frame).enhance(rng.uniform(0.90, 1.0))
 
     blur_lo, blur_hi = camera["blur"]
-    # Consume the draw unconditionally so the seed stream does not depend on
-    # whether the radius rounds to zero.
-    radius = radius_for_sigma(float(rng.uniform(blur_lo, blur_hi)))
-    if radius > 0:
-        channels = np.array(frame)
-        for channel in range(channels.shape[2]):
-            channels[:, :, channel] = box_blur(channels[:, :, channel], radius)
-        frame = Image.fromarray(channels, "RGB")
+    # Matched by variance rather than by radius. Rounding to a box radius made
+    # this a measured no-op on four of the six tiers -- the smallest cascade a
+    # radius can express is already sigma 1.415, and every tier but the two
+    # heavy ones declares a sub-pixel blur.
+    blur = float(rng.uniform(blur_lo, blur_hi))
+    channels = np.array(frame)
+    for channel in range(channels.shape[2]):
+        channels[:, :, channel] = blur_sigma(channels[:, :, channel], blur)
+    frame = Image.fromarray(channels, "RGB")
 
     noise_lo, noise_hi = camera["noise_sigma"]
     sigma = rng.uniform(noise_lo, noise_hi)
     arr = np.array(frame).astype(np.int16)
-    arr = arr + rng.normal(0, sigma, arr.shape).astype(np.int16)
+    arr = arr + _normal(rng, arr.shape, float(sigma)).astype(np.int16)
     frame = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGB")
 
     jpeg_lo, jpeg_hi = camera["jpeg"]
