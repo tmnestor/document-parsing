@@ -55,6 +55,71 @@ app = typer.Typer(add_completion=False)
 _CARRIED = ("prompt.md", "serialisation.yml", "README.md")
 
 
+def _write_carried_metadata(corpus: Path, target: Path, tier, pages: int) -> None:
+    """Write the files a tier corpus carries but does not render.
+
+    Every file here is derived from the clean corpus, hashes nothing, and is
+    named in no manifest -- so rewriting them cannot move a pixel or invalidate
+    a `sha256`. Keeping this separate from the render loop is what lets
+    `--metadata-only` refresh a shipped corpus in seconds: the repo's rule is
+    that a convention change re-emits rather than re-renders, and a corpus's
+    own documentation is a convention like any other.
+
+    Args:
+        corpus: The clean corpus the carried files come from.
+        target: The tier corpus being written.
+        tier: The tier, for its note.
+        pages: Page count, stated in the note.
+    """
+    for name in _CARRIED:
+        source = corpus / name
+        if source.exists():
+            shutil.copyfile(source, target / name)
+    (target / "DEGRADATION.md").write_text(_note(corpus, tier, pages), encoding="utf-8")
+
+
+def _refresh_metadata(corpus: Path, all_records: list[dict], plan: "RunPlan", tiers: list) -> list[dict]:
+    """Rewrite every tier's carried files, and report the page set found on disk.
+
+    The tier corpora are the authority for which pages exist: a refresh
+    describes a render that already happened, so it must not re-derive the page
+    set from today's `--type`/`--limit`. Those flags describe what to render,
+    and nothing is being rendered.
+
+    Args:
+        corpus: The clean corpus.
+        all_records: Every row of the clean manifest.
+        plan: The resolved run, for `out`.
+        tiers: Tiers to refresh.
+
+    Returns:
+        The clean manifest rows covering the pages the tiers actually hold.
+    """
+    stems: set[str] = set()
+    for tier in tiers:
+        target = plan.out / f"{corpus.name}_{tier.family}-{tier.name}"
+        manifest_path = target / "manifest.jsonl"
+        if not manifest_path.exists():
+            _fail(
+                f"{target.name} has no manifest.jsonl, so there is no rendered corpus whose "
+                "metadata could be refreshed.",
+                where=str(target.resolve()),
+                expected="a tier corpus already written by a full run, e.g.\n"
+                f"              {target}/manifest.jsonl",
+                recover="drop --metadata-only to render the tiers first — it rewrites only the "
+                "files a corpus carries and cannot create one.",
+            )
+        rows = [
+            json.loads(line)
+            for line in manifest_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        _write_carried_metadata(corpus, target, tier, len(rows))
+        stems |= {Path(row["image"]).stem for row in rows}
+        rprint(f"  [green]{tier.label:16}[/green] {len(rows):4d} page(s) -> {target}")
+    return [record for record in all_records if Path(record["image"]).stem in stems]
+
+
 def _fail(what: str, *, where: str, expected: str, recover: str) -> None:
     """Print a four-element diagnostic and exit."""
     rprint(f"[red]Cannot degrade the corpus.[/red]\n  What:     {what}")
@@ -142,6 +207,18 @@ def degrade(
         typer.Option("--type", help="Restrict to these document types; repeatable."),
     ] = None,
     limit: Annotated[int | None, typer.Option("--limit", help="First N pages, for a smoke test.")] = None,
+    # A corpus's carried files are derived and hash nothing, so a change to one
+    # should cost a copy rather than a re-render. Without this, correcting a
+    # sentence in the shipped README meant re-rendering every page of every
+    # tier -- the exact coupling the generate/serialise split exists to avoid.
+    metadata_only: Annotated[
+        bool,
+        typer.Option(
+            "--metadata-only",
+            help="Rewrite carried files and the pooled indexes for already-rendered tiers; "
+            "renders nothing.",
+        ),
+    ] = False,
 ) -> None:
     """Write one complete degraded corpus per declared tier."""
     manifest_path = corpus / "manifest.jsonl"
@@ -189,6 +266,12 @@ def degrade(
             "one of the corpus's document types.",
             recover="drop --type, or name a document type the manifest contains.",
         )
+
+    if metadata_only:
+        rprint(f"[bold]{corpus.name}[/bold]: refreshing metadata for {len(tiers)} tier(s)")
+        records = _refresh_metadata(corpus, all_records, plan, tiers)
+        _write_indexes(corpus, records, plan, tiers)
+        return
 
     rprint(
         f"[bold]{corpus.name}[/bold]: {len(records)} page(s) x {len(tiers)} tier(s) "
@@ -249,14 +332,25 @@ def degrade(
         (target / "manifest.jsonl").write_text(
             "".join(json.dumps(row) + "\n" for row in manifest), encoding="utf-8"
         )
-        for name in _CARRIED:
-            source = corpus / name
-            if source.exists():
-                shutil.copyfile(source, target / name)
-        (target / "DEGRADATION.md").write_text(_note(corpus, tier, len(manifest)), encoding="utf-8")
+        _write_carried_metadata(corpus, target, tier, len(manifest))
 
         rprint(f"  [green]{tier.label:16}[/green] {len(manifest):4d} page(s) -> {target}")
 
+    _write_indexes(corpus, records, plan, tiers)
+
+
+def _write_indexes(corpus: Path, records: list[dict], plan: "RunPlan", tiers: list) -> None:
+    """Write the two indexes that span corpora rather than describing one.
+
+    Shared by a full run and a `--metadata-only` refresh: both are derived from
+    the manifests already on disk, so neither needs the render loop.
+
+    Args:
+        corpus: The clean corpus.
+        records: Clean manifest rows the run covers, deciding the clean rows pooled.
+        plan: The resolved run, for `out`.
+        tiers: Tiers named in the matrix.
+    """
     # The clean corpus is a row like any other: without that baseline a
     # comparison cannot separate a weak model from one the degradation hurt.
     rows = [matrix_row(corpus, family="clean", severity="none")]
