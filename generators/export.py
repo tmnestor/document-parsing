@@ -29,6 +29,7 @@ import shutil
 from pathlib import Path
 
 import yaml
+from PIL import Image
 
 from generators.serialise import load_serialisation_policy
 from generators.tables import table_html
@@ -71,6 +72,25 @@ def sha256_of(path: Path) -> str:
     return digest.hexdigest()
 
 
+def pixels_sha256_of(path: Path) -> str:
+    """Hash an image's decoded RGB pixels, independent of its encoding.
+
+    Identity of the IMAGE, not of the file. PNG is lossless, so a
+    different zlib compresses identical pixels into different bytes --
+    measured: zlib-ng 1.3.1 and zlib 1.3.2 disagree on every page. The
+    byte hash still catches a truncated transfer; this is what a vintage
+    check compares.
+
+    Args:
+        path: Path to the image file.
+
+    Returns:
+        The hex digest of the RGB pixel bytes.
+    """
+    with Image.open(path) as handle:
+        return hashlib.sha256(handle.convert("RGB").tobytes()).hexdigest()
+
+
 def _missing(kind: str, path: Path, *, recover_command: str) -> ExportError:
     """Build a four-element diagnostic for an artifact the export needs."""
     return ExportError(
@@ -100,8 +120,8 @@ def manifest_record(image: Path, transcript: Path, doc_type: str, *, family: str
             declared for that family, e.g. "moderate".
 
     Returns:
-        `{"image", "transcript", "doc_type", "sha256", "transcript_sha256",
-        "family", "severity"}` per design §6.1.
+        `{"image", "transcript", "doc_type", "sha256", "pixels_sha256",
+        "transcript_sha256", "family", "severity"}` per design §6.1.
 
     Raises:
         ExportError: Either file is missing.
@@ -115,6 +135,12 @@ def manifest_record(image: Path, transcript: Path, doc_type: str, *, family: str
         "transcript": f"transcripts/{transcript.name}",
         "doc_type": doc_type,
         "sha256": sha256_of(image),
+        # Identity of the IMAGE, not of the file. PNG is lossless, so a
+        # different zlib compresses identical pixels into different bytes --
+        # measured: zlib-ng 1.3.1 and zlib 1.3.2 disagree on every page. The
+        # byte hash still catches a truncated transfer; this is what a vintage
+        # check compares.
+        "pixels_sha256": pixels_sha256_of(image),
         # The image hash cannot see a serialisation-policy change: re-emitting
         # every transcript moves no pixel, so a scorer holding last vintage's
         # predictions verifies every image hash and scores garbage. Hashing the
