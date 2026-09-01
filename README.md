@@ -136,9 +136,31 @@ with functions IEEE-754 does not guarantee are portable. Both are closed:
   `generators/degradation/effects.py` and
   `docs/superpowers/specs/2026-09-01-cross-machine-determinism-design.md`.
 
-This closes the known causes of cross-machine divergence; it has not yet been
-re-verified end to end on two machines since the fix. `probe_phases.py` and
-`probe_augmentations.py` exist to run that check.
+**This has been measured, not just engineered.** On 2026-09-02 the same corpus
+was built from this commit on `arm64 Darwin` and on `x86_64 Linux`, and all
+**1,323 images across the seven corpora came out pixel-identical**, as did every
+transcript. The six degraded corpora matched byte for byte as well.
+
+The clean corpus is the one place the *files* differ, and the reason is worth
+knowing because it decides which hash means what. Clean pages are PNG, PNG is
+lossless, and the two hosts carry different zlib builds (zlib-ng 1.3.1 against
+zlib 1.3.2) — so the same pixels compress into different byte streams. The
+degraded corpora are JPEG and both hosts carry the same `libjpeg-turbo`, which
+is why those matched even at the byte level.
+
+So a corpus is identified by **`pixels_sha256`**, the hash of the decoded RGB
+pixels, which is stable across encoders and architectures. `sha256` remains in
+the manifest and keeps its own job: catching a truncated or corrupted transfer,
+which is a property of the file that arrived rather than of the image it
+carries. A vintage check compares the former; a download check compares the
+latter.
+
+Reproduce the measurement with `compare_vintages.py --fingerprint` on each host
+and compare the printed digests. `probe_phases.py` and `probe_augmentations.py`
+localise a divergence to a single stage if one ever appears.
+
+One caveat on the claim's scope: two architectures were tested, at identical
+pinned dependency versions. That is what "portable" is warranted to mean here.
 
 ## Why the labels can be trusted
 
