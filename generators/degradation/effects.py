@@ -15,6 +15,8 @@ This is the same treatment `config/degradation.yml` records for `Folding` and
 
 import numpy as np
 
+from generators.degradation.kernels import box_blur, radius_for_sigma
+
 
 def _ramp(height: int, width: int, direction: int) -> np.ndarray:
     """A 0..1 ramp across the page along `direction`, in degrees.
@@ -88,3 +90,63 @@ class LightingGradient:
         scale = ceiling * (1.0 - 0.22 * ramp)
         scaled = image.astype(np.float64) * scale[:, :, None]
         return np.clip(scaled + 0.5, 0, 255).astype(np.uint8)
+
+
+_SIDES = {"top": (0, 1), "bottom": (0, -1), "left": (1, 1), "right": (1, -1)}
+
+
+class ShadowCast:
+    """A soft-edged shadow falling across one side of the page.
+
+    Args:
+        shadow_side: Which edge the shadow falls from: top, bottom, left, right.
+        shadow_opacity_range: Range to sample the darkest opacity from.
+    """
+
+    def __init__(self, shadow_side: str, shadow_opacity_range: tuple[float, float]) -> None:
+        self.shadow_side = str(shadow_side)
+        self.shadow_opacity_range = (
+            float(shadow_opacity_range[0]),
+            float(shadow_opacity_range[1]),
+        )
+
+    def __call__(self, image: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+        """Apply the shadow effect to the image.
+
+        Args:
+            image: Input image array.
+            rng: Seeded random generator for sampling opacity.
+
+        Returns:
+            Degraded image with the same shape and dtype as the input.
+
+        Raises:
+            ValueError: If shadow_side is not one of the supported values.
+        """
+        if self.shadow_side not in _SIDES:
+            raise ValueError(
+                "Unknown shadow side.\n"
+                f"  What:     ShadowCast was given side '{self.shadow_side}', "
+                "which names no edge of the page.\n"
+                "  Where:    config/degradation.yml -> a paper-phase ShadowCast entry\n"
+                f"  Expected: one of {sorted(_SIDES)}, e.g. 'side: top'.\n"
+                "  Recover:  correct the 'side:' value in that entry."
+            ) from None
+        height, width = image.shape[:2]
+        axis, sign = _SIDES[self.shadow_side]
+        ramp = _ramp(height, width, 0 if axis else 90)
+        if sign > 0:
+            ramp = 1.0 - ramp
+
+        low, high = self.shadow_opacity_range
+        opacity = float(rng.uniform(low, high))
+
+        # A uint8 mask, softened by the same integer blur the Gaussian
+        # replacement uses, so no transcendental builds the falloff.
+        mask = np.clip(ramp * opacity * 255.0 + 0.5, 0, 255).astype(np.uint8)
+        mask = box_blur(mask, radius_for_sigma(max(height, width) * 0.02))
+
+        alpha = mask.astype(np.int32)[:, :, None]
+        base = image.astype(np.int32)
+        # Exact integer blend toward black: no float rounding to disagree about.
+        return ((base * (255 - alpha) + 127) // 255).astype(np.uint8)
