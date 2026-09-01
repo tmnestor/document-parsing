@@ -1,51 +1,36 @@
-"""Registry and runner for the Augraphy phase pipeline.
+"""Registry and runner for the ink and paper effects phase.
 
 Only the augmentations this project declares are registered. An allow-list
-rather than a passthrough to Augraphy's whole catalogue is deliberate: it turns
-a YAML typo into a startup diagnostic naming the valid options, and it records
-which effects were chosen and which were rejected.
+rather than a passthrough to a whole catalogue is deliberate: it turns a YAML
+typo into a startup diagnostic naming the valid options, and it records which
+effects were chosen and which were rejected.
 
 Ported from the predecessor repo, with the registry widened for the scanner
 family. That repo excluded `DirtyRollers` and `DirtyDrum` as "photocopier
 damage, not phone photography" — correct there, since it modelled only phone
-photos. Here they are exactly right for the `scan` ladder and still absent from
-`photo`, which is what a per-family allow-list is for.
+photos. `DirtyDrum` would be exactly right for the `scan` ladder, but it has no
+portable replacement yet, so it stays unregistered alongside `DirtyRollers`.
+
+The classes registered below (`generators.degradation.effects`) are this
+project's own re-derivation, not Augraphy's: they were measured to produce
+different pixels on arm64 macOS and x86_64 Linux at identical library
+versions, because Augraphy evaluates transcendental functions and IEEE-754
+does not constrain those across platforms. See `effects.py`.
 """
 
-import contextlib
-import tempfile
 from collections.abc import Callable
 
 import numpy as np
 from PIL import Image
 
+from generators.degradation.effects import InkBleed, LightingGradient, ShadowCast
 from generators.degradation.tiers import Tier
 
-try:
-    from augraphy import (
-        AugraphyPipeline,
-        DirtyDrum,
-        InkBleed,
-        LightingGradient,
-        ShadowCast,
-    )
-except ImportError as err:  # pragma: no cover - environment failure, not logic
-    raise ImportError(
-        "Augraphy is not installed.\n"
-        f"  What:     image degradation needs augraphy, which failed to import: {err}.\n"
-        "  Where:    build_corpus.sh installs it into `docparse`; environment.yml's "
-        "comments explain why it is not listed there directly.\n"
-        "  Expected: augraphy==8.2.6 installed WITHOUT its declared dependencies, since "
-        "it requires `opencv-python` (the full GUI build) which would displace the pinned "
-        "opencv-python-headless. numpy must also stay at the version environment.yml pins, "
-        "the ceiling numba imposes.\n"
-        "  Recover:  run ./build_corpus.sh, which installs and verifies augraphy; or by "
-        "hand: `conda run -n docparse pip install --no-deps augraphy==8.2.6`, then "
-        "`conda run -n docparse pip uninstall -y opencv-python` if the full opencv build "
-        "was pulled in alongside it."
-    ) from err
+# What a constructed effect looks like: called with the frame and the phase's
+# shared seeded generator, returning the degraded frame.
+Effect = Callable[[np.ndarray, np.random.Generator], np.ndarray]
 
-# YAML name -> Augraphy class. Every geometric augmentation is deliberately
+# YAML name -> effect class. Every geometric augmentation is deliberately
 # excluded: geometry.py owns geometry, so that skew and warp are one
 # implementation rather than two that can disagree.
 #
@@ -64,22 +49,20 @@ except ImportError as err:  # pragma: no cover - environment failure, not logic
 # The two artefacts they provided -- ADF roller streaks and a folded page -- are
 # real and worth having, so they are reimplemented as seeded `marks` in
 # geometry.py instead. See `MARKS` there.
-AUGMENTATIONS: dict[str, Callable[..., object]] = {
+AUGMENTATIONS: dict[str, Callable[..., Effect]] = {
     "InkBleed": InkBleed,
     "LightingGradient": LightingGradient,
     "ShadowCast": ShadowCast,
-    "DirtyDrum": DirtyDrum,
 }
 
-# YAML key -> the constructor keyword each Augraphy class expects. The YAML uses
-# short readable names; Augraphy's own parameter names are longer and
-# inconsistent between classes. Verified against augraphy 8.2.6 — if the pin
-# moves, re-check with inspect.signature(<Class>.__init__).parameters.
+# YAML key -> the constructor keyword each class expects. The YAML uses short
+# readable names; kept distinct from the re-derived classes' own keyword names
+# for the same reason Augraphy's differed — a stable YAML vocabulary that does
+# not have to track whichever implementation is registered.
 _PARAM_NAMES: dict[str, dict[str, str]] = {
     "InkBleed": {"intensity": "intensity_range", "kernel": "kernel_size"},
     "LightingGradient": {"max_brightness": "max_brightness", "direction": "direction"},
     "ShadowCast": {"side": "shadow_side", "opacity": "shadow_opacity_range"},
-    "DirtyDrum": {"line_width": "line_width_range", "line_concentration": "line_concentration"},
 }
 
 # InkBleed wants a (w, h) kernel; the YAML declares a single int, since a
@@ -91,8 +74,8 @@ class AugmentationError(RuntimeError):
     """Raised when a tier names an augmentation that is not registered."""
 
 
-def _build(spec: dict, *, tier: Tier, phase: str) -> object:
-    """Instantiate one augmentation from its YAML spec.
+def _build(spec: dict, *, tier: Tier, phase: str) -> Effect:
+    """Instantiate one effect from its YAML spec.
 
     Args:
         spec: The YAML mapping, carrying `augmentation:` plus its parameters.
@@ -100,7 +83,7 @@ def _build(spec: dict, *, tier: Tier, phase: str) -> object:
         phase: "ink" or "paper", for diagnostics.
 
     Returns:
-        The constructed Augraphy augmentation.
+        The constructed effect, callable as `effect(image_array, rng)`.
 
     Raises:
         AugmentationError: No `augmentation:` key, an unregistered name, or a
@@ -145,18 +128,18 @@ def _build(spec: dict, *, tier: Tier, phase: str) -> object:
                 f"  Where:    config/degradation.yml -> {where}\n"
                 f"  Expected: one of {sorted(mapping)} for {name}.\n"
                 f"  Recover:  remove '{key}', or add it to _PARAM_NAMES['{name}'] in "
-                "generators/degradation/augment.py with the Augraphy keyword it maps to."
+                "generators/degradation/augment.py with the constructor keyword it maps to."
             )
         if param in _SQUARE_KERNEL_KEYS:
             kwargs[param] = (int(value), int(value))
         elif isinstance(value, list):
-            kwargs[param] = tuple(value)  # Augraphy wants tuples for its *_range params
+            kwargs[param] = tuple(value)  # the *_range params want tuples, not lists
         else:
             kwargs[param] = value
     return factory(**kwargs)
 
 
-def apply_augraphy(image: Image.Image, tier: Tier, seed: int) -> Image.Image:
+def apply_effects(image: Image.Image, tier: Tier, seed: int) -> Image.Image:
     """Apply a tier's ink and paper phases to the flat page.
 
     Runs before any geometry: these model damage to the paper itself, which must
@@ -181,30 +164,11 @@ def apply_augraphy(image: Image.Image, tier: Tier, seed: int) -> Image.Image:
     if not ink and not paper:
         return image.copy()
 
-    pipeline = AugraphyPipeline(
-        ink_phase=ink,
-        paper_phase=paper,
-        post_phase=[],
-        save_outputs=False,
-        log=False,
-        random_seed=seed,
-    )
-    # Augraphy samples from NumPy's global RNG in places its own random_seed does
-    # not reach, so both are set. This is the one spot where global random state
-    # is unavoidable; it is contained here and covered by a byte-identity test.
-    np.random.seed(seed)
-
-    # AugraphyPipeline.__call__ unconditionally writes its input into
-    # `os.getcwd()/augraphy_cache/` — a ring buffer written whatever
-    # `save_outputs` says, with no setting to disable or relocate it. Running in
-    # a throwaway directory sends it somewhere harmless.
-    #
-    # This is containment, not tidiness. Augraphy's PageBorder, BleedThrough and
-    # BookBinding *read* from that cache, so a pipeline including them would
-    # composite whatever images the last run left behind — output depending on
-    # directory state rather than on the seed. None of the registered
-    # augmentations read it, and pointing the cache at a fresh empty directory
-    # each call makes that structurally true rather than true-by-inspection.
-    with tempfile.TemporaryDirectory() as cache_dir, contextlib.chdir(cache_dir):
-        result = pipeline(np.array(image.convert("RGB")))
-    return Image.fromarray(np.asarray(result, dtype=np.uint8), "RGB")
+    # One seeded generator for the whole phase, passed explicitly. The previous
+    # implementation set NumPy's global seed because Augraphy sampled from it in
+    # places its own `random_seed` did not reach; nothing here reads a global.
+    rng = np.random.default_rng(seed)
+    frame = np.array(image.convert("RGB"))
+    for effect in (*ink, *paper):
+        frame = effect(frame, rng)
+    return Image.fromarray(np.asarray(frame, dtype=np.uint8), "RGB")

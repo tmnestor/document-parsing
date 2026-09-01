@@ -46,11 +46,13 @@ class Tier:
         name: Severity label within the family, e.g. "light".
         suffix: Filename suffix distinguishing this variant, e.g. "scan1".
         description: Why this severity exists, for whoever reads the config.
-        ink: Augraphy ink-phase specs, each naming a registered augmentation.
-        paper: Augraphy paper-phase specs, same shape as `ink`.
-        marks: This project's own seeded paper effects, applied after Augraphy
-            and before the geometry. They exist because the Augraphy effects
-            that produced the same artefacts are not reproducible.
+        ink: Ink-phase specs, each naming a registered augmentation (see
+            generators/degradation/augment.py).
+        paper: Paper-phase specs, same shape as `ink`.
+        marks: This project's own seeded paper effects, applied after the ink
+            and paper phase and before the geometry. They exist because the
+            Augraphy effects that used to produce the same artefacts were not
+            reproducible.
         geometry: Geometry parameters; `mode` selects skew or warp.
         camera: Photometric parameters — blur, noise_sigma, jpeg.
     """

@@ -8,7 +8,19 @@ extend-exclude = ["docs"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ARG", "PTH"]
-ignore = ["ARG001", "ARG002", "F841"]
+# ARG002 is ENFORCED here, unlike the usual default. The rule is normally off
+# because framework callbacks must accept arguments they never read -- but
+# measured across this repository, ARG002 flags exactly one site, and that one
+# is a genuine ambiguity rather than a framework's demand: an effect that takes
+# an `rng` it does not sample from. Nothing mechanical could tell a reader
+# whether that was deliberate or a forgotten hookup, which is precisely what
+# the rule is for. Naming such a parameter `_rng` states the intent in the
+# signature and lets the linter hold it there.
+#
+# ARG001 stays off, and its usual justification does hold: the layout DSL
+# dispatches primitives through one uniform signature, so several take `params`
+# or `is_last` without reading them. Five sites, all of that shape.
+ignore = ["ARG001", "F841"]
 
 [tool.mypy]
 python_version = "3.12"

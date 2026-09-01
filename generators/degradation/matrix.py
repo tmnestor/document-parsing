@@ -5,10 +5,12 @@ hashed manifest. What was missing is a statement that these seven directories
 describe one run, so a comparison can iterate them without a human remembering
 which belong together.
 
-Deliberately imports nothing heavy. `generators/degradation/` is the one package
-`docparse` cannot import, but that is because of augraphy, numpy and opencv --
-none of which the index needs. Keeping this module light means the matrix can be
-built and tested in `docparse`, where the rest of the config tests already run.
+Deliberately imports nothing heavy. `numpy` and `opencv` are only needed to
+degrade a page, so the rest of `generators/degradation/` defers them to
+function scope, keeping `config/degradation.yml` loadable without paying for
+those imports (see `generators/degradation/__init__.py`); this module needs
+neither, so it can be built and tested in `docparse` like the rest of the
+config tests.
 """
 
 import hashlib

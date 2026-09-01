@@ -1,24 +1,26 @@
-"""Which individual augmentation is not portable across machines?
+"""Which individual effect is not reproducible on one machine?
 
-`probe_phases.py` localised cross-machine divergence to the augraphy phase --
+`probe_phases.py` localised cross-machine divergence to the effects phase --
 the first thing that runs, before marks, geometry or camera. This narrows it
-further, running each augmentation ALONE through the real `apply_augraphy` path.
+further, running each effect ALONE through the real `apply_effects` path.
 
-Going through `apply_augraphy` is essential rather than convenient. Augraphy's
-augmentations draw from Python's `random`, NumPy's global RNG and OpenCV's RNG,
-and only `AugraphyPipeline(random_seed=...)` plus the explicit `np.random.seed`
-in `apply_augraphy` pin all three. Constructing an augmentation directly and
-seeding NumPy alone gives a DIFFERENT result on every run of the same process,
-which an earlier version of this probe did -- so it measured nothing.
+Going through `apply_effects` is essential rather than convenient: it is the
+same entry point `degrade_page` calls, so a probe that constructs an effect
+some other way could pass while the real pipeline still diverges. `InkBleed`,
+`LightingGradient` and `ShadowCast` are this project's own re-derivation --
+portable arithmetic seeded only from the caller's `np.random.Generator`, with
+no global RNG state anywhere in the chain (see
+`generators/degradation/effects.py`).
 
-Each case therefore runs twice. If the two disagree the augmentation is not
+Each case therefore runs twice. If the two disagree the effect is not
 reproducible even on one machine, and the cross-machine question does not arise
 for it yet.
 
-The point is to size a fix. `config/degradation.yml` already records that
-`Folding` and `DirtyRollers` were dropped as not reproducible and reimplemented
-here as `marks:`; an augmentation that diverges across machines is a candidate
-for the same treatment.
+The point is to size a fix. `config/degradation.yml` already records that the
+library this project used to depend on had two augmentations, `Folding` and
+`DirtyRollers`, that were not seedable at all and were reimplemented here as
+`marks:`; an effect that diverges across machines is a candidate for the same
+treatment.
 
     python probe_augmentations.py CLEAN_PAGE.png
 """
@@ -59,7 +61,7 @@ def main() -> int:
         print(__doc__)
         return 2
 
-    from generators.degradation.augment import apply_augraphy
+    from generators.degradation.augment import apply_effects
     from generators.degradation.tiers import Tier
 
     with Image.open(Path(sys.argv[1])) as handle:
@@ -80,8 +82,8 @@ def main() -> int:
             camera={"blur": [0, 0], "noise_sigma": [0, 0], "jpeg": [100, 100]},
         )
         try:
-            first = _digest(apply_augraphy(clean.copy(), tier, SEED))
-            second = _digest(apply_augraphy(clean.copy(), tier, SEED))
+            first = _digest(apply_effects(clean.copy(), tier, SEED))
+            second = _digest(apply_effects(clean.copy(), tier, SEED))
         except Exception as exc:
             print(f"{name:20} failed: {exc}")
             continue
