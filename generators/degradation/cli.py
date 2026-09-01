@@ -1,9 +1,9 @@
 """Turn an exported clean corpus into one degraded corpus per tier.
 
-Runs in `docparse`, the one environment. It imports numpy, opencv and
-augraphy; the first two are pinned in `environment.yml`, and `build_corpus.sh`
-installs augraphy itself, with `--no-deps`, and verifies the result — see
-`generators/degradation/augment.py` for why a plain install is unsafe.
+Runs in `docparse`, the one environment. It imports numpy and opencv, both
+pinned directly in `environment.yml` — see `generators/degradation/geometry.py`
+(`check_opencv`) for why the exact opencv build matters and what it guards
+against.
 
 **It consumes an exported corpus and produces exported corpora.** The output of
 each tier is a complete `parsing_*/` directory — images, transcripts, layout
@@ -152,8 +152,8 @@ def resolve_run(
 ) -> RunPlan:
     """Fold flags over configuration to decide what this run covers.
 
-    Extracted from the command body so it can be tested in `docparse`, where
-    augraphy is absent and the degrade loop itself cannot run.
+    Extracted from the command body so it can be unit-tested without exercising
+    the full `degrade_page` pipeline or requiring a real corpus on disk.
 
     Args:
         config_path: Path to `degradation.yml`.

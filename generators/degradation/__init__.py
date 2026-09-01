@@ -1,4 +1,4 @@
-"""Image degradation: Augraphy paper damage, then the intake channel's geometry.
+"""Image degradation: ink and paper effects, then the intake channel's geometry.
 
 Production receives scanned documents, so a corpus of clean renders measures a
 condition production does not have. This package degrades a rendered page to a
@@ -11,16 +11,16 @@ re-serialising, no new ground truth to validate — and it means any score
 difference is attributable to image quality alone. `tests/test_degradation.py`
 pins it.
 
-Ordering is load-bearing, and is enforced here rather than in the config:
-Augraphy's ink and paper phases run on the flat page, before the geometry,
-because a crease belongs to the paper and must be transformed *with* it;
-painting one across an already skewed page reads as a defect in the file rather
-than in the document. Blur, sensor noise and compression run last, because they
-belong to the sensor and the file.
+Ordering is load-bearing, and is enforced here rather than in the config: the
+ink and paper phases run on the flat page, before the geometry, because a
+crease belongs to the paper and must be transformed *with* it; painting one
+across an already skewed page reads as a defect in the file rather than in the
+document. Blur, sensor noise and compression run last, because they belong to
+the sensor and the file.
 
 This package runs in the same `docparse` environment as everything else — see
-`environment.yml`, whose comments explain why `augraphy` is installed
-separately by `build_corpus.sh` rather than listed there directly.
+`environment.yml`, which lists `numpy` and `opencv-python-headless` directly as
+this package's only runtime dependencies, with no separate install step.
 """
 
 import hashlib
@@ -31,12 +31,11 @@ from generators.degradation.tiers import Tier, TierConfigError, load_tiers
 if TYPE_CHECKING:  # pragma: no cover - import-time typing only
     from PIL import Image
 
-# numpy, opencv and augraphy are imported inside `degrade_page`, not here, and
-# the same rule `runners/common.py` follows for parser imports applies for the
-# same reason: `config/degradation.yml` must stay loadable — and therefore
-# validatable in CI — without paying for those imports (or requiring augraphy,
-# which `environment.yml` deliberately does not list) on every invocation that
-# does not degrade anything.
+# numpy and opencv are imported inside `degrade_page`, not here, and the same
+# rule `runners/common.py` follows for parser imports applies for the same
+# reason: `config/degradation.yml` must stay loadable — and therefore
+# validatable in CI — without paying for those imports on every invocation
+# that does not degrade anything.
 
 __all__ = [
     "Tier",
@@ -57,11 +56,20 @@ def page_seed(stem: str, tier: Tier) -> int:
     otherwise produce visibly correlated damage and understate the variety a
     severity ladder is meant to provide.
 
-    Masked to 31 bits because Augraphy hands the seed to `cv2.setRNGSeed`,
-    which takes a signed C int and raises `ValueError: integer won't fit into a
-    C int` above 2**31 - 1. A full 32-bit hash overflows it about half the time,
-    so the failure is intermittent across pages and looks like a bad page rather
-    than a bad seed.
+    Masked to 31 bits. This was originally required because Augraphy handed the
+    seed to `cv2.setRNGSeed`, which takes a signed C int and raises
+    `ValueError: integer won't fit into a C int` above 2**31 - 1 — a full
+    32-bit hash overflowed it about half the time, so the failure was
+    intermittent across pages and looked like a bad page rather than a bad
+    seed. Augraphy is gone and there are now zero `cv2.setRNGSeed` calls
+    anywhere in this codebase (verified with `grep -rn setRNGSeed`), so that
+    requirement no longer holds — `np.random.default_rng`, the only consumer
+    left, accepts the full 32-bit range.
+
+    The mask stays anyway. Narrowing it back to 32 bits would change the seed
+    of every existing page and tier, which re-renders the entire degraded
+    corpus — a deliberate corpus revision for whoever next touches the seeding
+    scheme, not a side effect of removing a dependency.
 
     Args:
         stem: The page's filename stem, e.g. "CASE001_bank_statements".
@@ -108,9 +116,9 @@ def degrade_page(image: "Image.Image", tier: Tier, seed: int) -> "Image.Image":
     augmented = apply_effects(image, tier, seed)
     rng = np.random.default_rng(seed)
 
-    # Our own paper effects, after Augraphy and still on the flat page, so a
-    # streak or a crease is transformed with the paper rather than painted
-    # across an image that has already been skewed.
+    # Our own paper effects, after the ink and paper effects phase and still on
+    # the flat page, so a streak or a crease is transformed with the paper
+    # rather than painted across an image that has already been skewed.
     augmented = apply_marks(augmented, tier, rng)
 
     mode = tier.geometry["mode"]

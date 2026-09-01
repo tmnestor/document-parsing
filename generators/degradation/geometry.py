@@ -1,7 +1,8 @@
 """Page geometry and sensor artefacts: the two intake channels' physics.
 
-Augraphy treats the page as a rectangle square-on to the camera, so every
-geometric effect lives here instead.
+The ink and paper effects (generators/degradation/augment.py) treat the page as
+a rectangle square-on to the camera, so every geometric effect lives here
+instead.
 
 Two modes, because the two channels move the page differently:
 
@@ -34,14 +35,14 @@ from .kernels import box_blur, radius_for_sigma
 # under the same seed, and the manifest hashes then disagree with every
 # prediction already scored against them.
 #
-# Measured 2026-08-22: installing augraphy plainly (with its declared
-# dependencies) leaves BOTH opencv-python-headless 4.13.0.92 and opencv-python
-# 5.0.0.93 present, because augraphy declares the GUI build as a hard
-# requirement and pip honours it. `cv2` then resolves to 5.0.0.93, and 2 of 9
-# degraded images came out different. `build_corpus.sh` installs augraphy with
-# `--no-deps` and verifies the result instead of just documenting the uninstall
-# that fixes it; this check is here because a documented step is one that can
-# be skipped.
+# Measured 2026-08-22: installing Augraphy plainly (with its declared
+# dependencies) left BOTH opencv-python-headless 4.13.0.92 and opencv-python
+# 5.0.0.93 present, because Augraphy declared the GUI build as a hard
+# requirement and pip honoured it. `cv2` then resolved to 5.0.0.93, and 2 of 9
+# degraded images came out different. Augraphy is no longer a dependency (see
+# `environment.yml`), so that specific path is closed, but nothing stops some
+# future dependency from pulling in `opencv-python` again — this check is here
+# because a documented pin is one that can be forgotten, and this one is not.
 _PINNED_CV2 = "4.13.0"
 
 
@@ -65,12 +66,12 @@ def check_opencv() -> None:
         "images — measured at 2 of 9 pages differing between 4.13.0 and 5.0.0.\n"
         "  Where:    the active conda environment; check with\n"
         "              pip list | grep -i opencv\n"
-        "  Expected: ONLY opencv-python-headless==4.13.0.92. augraphy declares the GUI "
-        "build opencv-python as a hard requirement, so a plain `pip install augraphy` "
-        "leaves both present and the GUI build wins — which is why build_corpus.sh "
-        "installs it with --no-deps instead.\n"
-        "  Recover:  pip uninstall -y opencv-python && pip install --no-deps "
-        "augraphy==8.2.6\n"
+        "  Expected: ONLY opencv-python-headless==4.13.0.92, as pinned in "
+        "environment.yml. Something else in this environment has pulled in the GUI "
+        "build, opencv-python, which provides the same cv2 module and wins the "
+        "conflict.\n"
+        "  Recover:  pip uninstall -y opencv-python && "
+        "pip install opencv-python-headless==4.13.0.92\n"
         "            then re-check that pip list shows only the headless build."
     )
 
@@ -315,7 +316,7 @@ def fold_ridges(image: Image.Image, spec: dict, rng: np.random.Generator) -> Ima
         # from the platform's libm and is not portable. `2.5484` restores the peak
         # amplitude of the profile this replaces, so the crease reads at the same
         # strength; the shape differs slightly, which spec section 3 sanctions --
-        # these effects are re-derived to look right, not to match augraphy.
+        # these effects are re-derived to look right, not to match Augraphy.
         reach = spread * 2.5
         scaled = np.clip(rows / reach, -1.0, 1.0)
         falloff = 1.0 - scaled * scaled
@@ -326,9 +327,9 @@ def fold_ridges(image: Image.Image, spec: dict, rng: np.random.Generator) -> Ima
 
 
 # YAML name -> implementation. Registered here rather than in augment.py because
-# these are this project's own effects, applied after Augraphy and before the
-# geometry, and they exist precisely because the Augraphy equivalents could not
-# be made reproducible.
+# these are this project's own effects, applied after the ink and paper effects
+# phase and before the geometry, and they exist precisely because the Augraphy
+# equivalents could not be made reproducible.
 MARKS = {
     "roller_streaks": roller_streaks,
     "fold_ridges": fold_ridges,
@@ -339,7 +340,7 @@ def apply_marks(image: Image.Image, tier, rng: np.random.Generator) -> Image.Ima
     """Apply a tier's own paper marks, in declared order.
 
     Args:
-        image: The flat page, already through Augraphy's phases.
+        image: The flat page, already through the ink and paper effects phase.
         tier: The tier supplying `marks`.
         rng: Seeded generator; all randomness is drawn from it.
 

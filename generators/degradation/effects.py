@@ -1,8 +1,8 @@
 """The ink and paper effects, re-derived to be portable.
 
-These replace augraphy's `InkBleed`, `LightingGradient` and `ShadowCast`, which
+These replace Augraphy's `InkBleed`, `LightingGradient` and `ShadowCast`, which
 were measured to produce different pixels on arm64 macOS and x86_64 Linux at
-identical library versions. The cause was libm: augraphy evaluates
+identical library versions. The cause was libm: Augraphy evaluates
 transcendental functions, and IEEE-754 does not constrain them.
 
 Everything here uses only `+ - * /`, `sqrt`, comparisons and integer arithmetic,
@@ -10,7 +10,7 @@ all of which the standard requires to be correctly rounded. Randomness comes
 from the caller's seeded generator, never a global.
 
 This is the same treatment `config/degradation.yml` records for `Folding` and
-`DirtyRollers`: an augraphy effect that cannot reproduce is rebuilt here.
+`DirtyRollers`: an Augraphy effect that cannot reproduce is rebuilt here.
 """
 
 import numpy as np

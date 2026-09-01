@@ -9,14 +9,12 @@
 #
 # 55 pages x 6 tiers = 330 degraded pages, about 300 MB of JPEG.
 #
-# Runs in an environment with augraphy installed. On this machine the
-# predecessor repo's `synthetic` env already carries the exact pins; otherwise
-# create this repo's `docparse` env and install augraphy the way
-# build_corpus.sh does:
+# Runs in the `docparse` environment (numpy and opencv, pinned directly in
+# environment.yml -- no separate install step). On this machine the
+# predecessor repo's `synthetic` env already carries compatible pins;
+# otherwise create this repo's own:
 #
 #     conda env create -f environment.yml
-#     conda run -n docparse pip install --no-deps augraphy==8.2.6
-#     conda run -n docparse pip uninstall -y opencv-python  # if it was pulled in
 
 set -uo pipefail
 
@@ -29,10 +27,9 @@ fail() { echo "!! $*" >&2; exit 1; }
 
 [[ -d $CORPUS/images ]] || fail "corpus not found: $CORPUS (set CORPUS=)"
 
-conda run -n "$ENV_NAME" python -c "import augraphy, cv2, numpy" 2>/dev/null ||
-    fail "environment '$ENV_NAME' cannot import augraphy/cv2/numpy.
-   Set ENV_NAME=, or create docparse (conda env create -f environment.yml) and
-   install augraphy into it: pip install --no-deps augraphy==8.2.6"
+conda run -n "$ENV_NAME" python -c "import cv2, numpy" 2>/dev/null ||
+    fail "environment '$ENV_NAME' cannot import cv2/numpy.
+   Set ENV_NAME=, or create docparse: conda env create -f environment.yml"
 
 # The clean corpus must be the one the 31B was scored on, or the degraded set
 # measures degradation plus a corpus change.

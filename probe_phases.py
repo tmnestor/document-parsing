@@ -10,7 +10,8 @@ each, so comparing two machines' output shows the FIRST phase whose digest
 diverges. Everything downstream of that inherits the difference, so only the
 first divergence names a cause:
 
-    augraphy   ink and paper effects (numpy, scikit-image)
+    effects    ink and paper effects, this project's own portable
+               re-derivation (numpy) -- see generators/degradation/effects.py
     marks      this repository's own roller streaks and fold ridges (numpy)
     geometry   skew or perspective warp (cv2.warpPerspective, INTER_CUBIC)
     camera     blur, noise, JPEG round-trip (PIL)
@@ -54,14 +55,14 @@ def main() -> int:
     with Image.open(page_path) as handle:
         clean = handle.convert("RGB").copy()
     print(f"clean input      {_digest(clean)}   {page_path.name}\n")
-    print(f"{'tier':16} {'augraphy':>17} {'marks':>17} {'geometry':>17} {'camera':>17}")
+    print(f"{'tier':16} {'effects':>17} {'marks':>17} {'geometry':>17} {'camera':>17}")
 
     for tier in load_tiers(CONFIG):
-        augmented = apply_effects(clean.copy(), tier, SEED)
-        after_augraphy = _digest(augmented)
+        effected = apply_effects(clean.copy(), tier, SEED)
+        after_effects = _digest(effected)
 
         rng = np.random.default_rng(SEED)
-        marked = apply_marks(augmented, tier, rng)
+        marked = apply_marks(effected, tier, rng)
         after_marks = _digest(marked)
 
         if tier.geometry["mode"] == "skew":
@@ -72,7 +73,7 @@ def main() -> int:
 
         final = apply_photometrics(placed, tier.camera, rng)
         print(
-            f"{tier.label:16} {after_augraphy:>17} {after_marks:>17} "
+            f"{tier.label:16} {after_effects:>17} {after_marks:>17} "
             f"{after_geometry:>17} {_digest(final):>17}"
         )
     return 0
