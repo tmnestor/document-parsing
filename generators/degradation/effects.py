@@ -134,6 +134,7 @@ class ShadowCast:
             ) from None
         height, width = image.shape[:2]
         axis, sign = _SIDES[self.shadow_side]
+        # Axis 0 (top/bottom) uses direction 90 (vertical); axis 1 (left/right) uses 0 (horizontal).
         ramp = _ramp(height, width, 0 if axis else 90)
         if sign > 0:
             ramp = 1.0 - ramp
@@ -144,6 +145,7 @@ class ShadowCast:
         # A uint8 mask, softened by the same integer blur the Gaussian
         # replacement uses, so no transcendental builds the falloff.
         mask = np.clip(ramp * opacity * 255.0 + 0.5, 0, 255).astype(np.uint8)
+        # radius_for_sigma returns 0 for small images (under ~12 px), but box_blur handles this.
         mask = box_blur(mask, radius_for_sigma(max(height, width) * 0.02))
 
         alpha = mask.astype(np.int32)[:, :, None]
