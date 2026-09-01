@@ -119,7 +119,21 @@ def load_font(size: int, *, family: str, bold: bool = False) -> Font:
 
     path = font_path(family, bold=bold)
     try:
-        font: Font = ImageFont.truetype(str(path), size)
+        # LAYOUT ENGINE IS PINNED, and this is load-bearing for determinism.
+        # Left unset, Pillow picks Raqm when the wheel bundles it and Basic when
+        # it does not -- so the same Pillow version lays glyphs out differently
+        # on different machines. Measured: macOS arm64 wheels ship without Raqm
+        # (engine 0), manylinux x86_64 wheels ship with it (engine 1, HarfBuzz
+        # 13.2.1), and the same page rendered under each differs pixel for pixel
+        # while FreeType, the font file and every pinned version are identical.
+        # That silently made a corpus unreproducible across build hosts.
+        #
+        # BASIC rather than RAQM because it is the one always available: Raqm is
+        # an optional dependency absent from the macOS wheels, so pinning RAQM
+        # would make the corpus unbuildable there. The corpus is Latin-script
+        # Australian business documents, which need none of the complex-script
+        # shaping Raqm exists to provide.
+        font: Font = ImageFont.truetype(str(path), size, layout_engine=ImageFont.Layout.BASIC)
     except OSError as err:
         raise FileNotFoundError(
             "Vendored font file is missing or unreadable.\n"

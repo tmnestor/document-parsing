@@ -59,15 +59,31 @@ def _synthetic() -> None:
     draw.ellipse((40, 110, 200, 190), outline="black", width=1)
     print(f"  shapes-only          pixels={_pixels(shapes)}")
 
-    # Text only, with the vendored face the corpus actually uses.
-    for size in (9, 11, 14):
+    def _draw(font) -> str:  # noqa: ANN001 - FreeTypeFont | ImageFont
         canvas = Image.new("RGB", (700, 90), "white")
         pen = ImageDraw.Draw(canvas)
-        font = ImageFont.truetype(str(FONT), size)
         pen.text((5, 5), "Commonwealth Bank 01/09/2023 $4,224.77 EFTPOS", font=font, fill="black")
         pen.text((5, 45), "WgAVAWjy fi fl ffi 0123456789 ,.-$%", font=font, fill="black")
+        return _pixels(canvas)
+
+    # Pillow's DEFAULT choice, which is the bug: unset, it takes Raqm where the
+    # wheel has it and Basic where it does not, so this line differs by machine.
+    for size in (9, 11, 14):
+        font = ImageFont.truetype(str(FONT), size)
         engine = getattr(font, "layout_engine", "?")
-        print(f"  text size={size:<3} engine={engine!s:24} pixels={_pixels(canvas)}")
+        print(f"  unpinned  size={size:<3} engine={engine!s:22} pixels={_draw(font)}")
+
+    # What the corpus ACTUALLY renders with, through the pinned loader. These
+    # lines must match across machines; the unpinned ones above need not.
+    try:
+        from generators.common import load_font
+
+        for size in (9, 11, 14):
+            loaded = load_font(size, family="liberation_sans", bold=False)
+            engine = getattr(loaded, "layout_engine", "?")
+            print(f"  load_font size={size:<3} engine={engine!s:22} pixels={_draw(loaded)}")
+    except Exception as exc:  # run from outside the repo, or before the pin landed
+        print(f"  load_font unavailable ({exc})")
 
 
 def _corpus(root: Path) -> None:
