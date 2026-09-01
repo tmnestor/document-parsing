@@ -152,3 +152,42 @@ class ShadowCast:
         base = image.astype(np.int32)
         # Exact integer blend toward black: no float rounding to disagree about.
         return ((base * (255 - alpha) + 127) // 255).astype(np.uint8)
+
+
+class InkBleed:
+    """Ink spreading outward from dark strokes, as on absorbent paper.
+
+    Args:
+        intensity_range: Range to sample the bleed strength from, 0-1.
+        kernel_size: `(w, h)` of the dilation kernel; the YAML declares one int.
+    """
+
+    def __init__(self, intensity_range: tuple[float, float], kernel_size: tuple[int, int]) -> None:
+        self.intensity_range = (float(intensity_range[0]), float(intensity_range[1]))
+        self.kernel_size = (int(kernel_size[0]), int(kernel_size[1]))
+
+    def __call__(self, image: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+        """Apply the ink bleed effect to the image.
+
+        Args:
+            image: Input image array.
+            rng: Seeded random generator for sampling intensity.
+
+        Returns:
+            Degraded image with the same shape and dtype as the input.
+        """
+        import cv2
+
+        intensity = float(rng.uniform(*self.intensity_range))
+        width, height = self.kernel_size
+        kernel = np.ones((max(1, height), max(1, width)), np.uint8)
+
+        # Dilating the INVERSE grows the dark strokes. cv2.dilate on uint8 is a
+        # max filter: integer, exact, and portable.
+        spread = 255 - cv2.dilate(255 - image, kernel)
+
+        weight = int(round(intensity * 255))
+        base = image.astype(np.int32)
+        toward = spread.astype(np.int32)
+        blended = (base * (255 - weight) + toward * weight + 127) // 255
+        return blended.astype(np.uint8)
