@@ -24,7 +24,7 @@ import io
 
 import cv2
 import numpy as np
-from PIL import Image, ImageEnhance, ImageFilter
+from PIL import Image, ImageEnhance
 
 from .kernels import box_blur, radius_for_sigma
 
@@ -75,11 +75,28 @@ def check_opencv() -> None:
     )
 
 
+def _cos_sin(theta: float) -> tuple[float, float]:
+    """Cosine and sine by series, identical on every machine.
+
+    `np.cos`/`np.sin` come from the platform's libm, which IEEE-754 does not
+    constrain -- measured to differ between glibc and Apple's. Over the
+    rotation range this corpus declares (widest +/-14 degrees) a
+    seventh-order series is accurate to 3e-10 radians, far below a pixel,
+    and uses only `+ - * /`, which the standard requires to be correctly
+    rounded everywhere.
+    """
+    squared = theta * theta
+    cos = 1.0 - squared / 2.0 + squared * squared / 24.0 - squared * squared * squared / 720.0
+    sin = theta * (1.0 - squared / 6.0 + squared * squared / 120.0 - squared * squared * squared / 5040.0)
+    return cos, sin
+
+
 def _rot(point: list[float], cx: float, cy: float, degrees: float) -> list[float]:
     """Rotate a point about (cx, cy) by `degrees`."""
     theta = np.radians(degrees)
+    cos, sin = _cos_sin(float(theta))
     x, y = point[0] - cx, point[1] - cy
-    return [cx + x * np.cos(theta) - y * np.sin(theta), cy + x * np.sin(theta) + y * np.cos(theta)]
+    return [cx + x * cos - y * sin, cy + x * sin + y * cos]
 
 
 def skew_on_platen(image: Image.Image, geometry: dict, rng: np.random.Generator) -> Image.Image:
@@ -294,8 +311,15 @@ def fold_ridges(image: Image.Image, spec: dict, rng: np.random.Generator) -> Ima
         spread = max(2.0, height * 0.004)
 
         rows = np.arange(height, dtype=np.float32) - centre
-        # An odd (antisymmetric) profile: lit above the crease, shaded below.
-        ridge = -rows / spread * np.exp(-0.5 * (rows / spread) ** 2) * strength
+        # A compact-support bump rather than a Gaussian derivative: np.exp comes
+        # from the platform's libm and is not portable. `2.5484` restores the peak
+        # amplitude of the profile this replaces, so the crease reads at the same
+        # strength; the shape differs slightly, which spec section 3 sanctions --
+        # these effects are re-derived to look right, not to match augraphy.
+        reach = spread * 2.5
+        scaled = np.clip(rows / reach, -1.0, 1.0)
+        falloff = 1.0 - scaled * scaled
+        ridge = -scaled * falloff * falloff * falloff * 2.5484 * strength
         arr += ridge[:, None, None]
 
     return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGB")
@@ -375,7 +399,14 @@ def apply_photometrics(image: Image.Image, camera: dict, rng: np.random.Generato
     frame = ImageEnhance.Contrast(frame).enhance(rng.uniform(0.90, 1.0))
 
     blur_lo, blur_hi = camera["blur"]
-    frame = frame.filter(ImageFilter.GaussianBlur(rng.uniform(blur_lo, blur_hi)))
+    # Consume the draw unconditionally so the seed stream does not depend on
+    # whether the radius rounds to zero.
+    radius = radius_for_sigma(float(rng.uniform(blur_lo, blur_hi)))
+    if radius > 0:
+        channels = np.array(frame)
+        for channel in range(channels.shape[2]):
+            channels[:, :, channel] = box_blur(channels[:, :, channel], radius)
+        frame = Image.fromarray(channels, "RGB")
 
     noise_lo, noise_hi = camera["noise_sigma"]
     sigma = rng.uniform(noise_lo, noise_hi)
