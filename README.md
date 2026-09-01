@@ -217,7 +217,8 @@ parsing_<YYYYMMDD>/
   transcripts/CASE001_invoices.md
   layout/CASE001_invoices.json
   tables/CASE001_invoices.html      # only when the page has a table
-  manifest.jsonl        {image, transcript, doc_type, sha256, layout, [tables]}
+  manifest.jsonl        {image, transcript, doc_type, sha256, transcript_sha256,
+                         family, severity, layout, [tables]}
   prompt.md
   serialisation.yml
   README.md
@@ -228,7 +229,16 @@ model cannot infer the layout template before reading a pixel. The policy and
 the hashed manifest ship **with the data**: the image hashes make scoring
 against a wrong corpus vintage impossible rather than merely detectable
 afterwards, and the prompt travels alongside because prompt and ground truth
-are a matched pair.
+are a matched pair. `transcript_sha256` is hashed for the same reason the
+image is — re-emitting transcripts under a changed serialisation policy moves
+no pixel, so an image-only check would pass while the labels underneath had
+changed.
+
+`family` and `severity` state what was done to the page: `clean`/`none` for
+this export, and the intake channel and rung for a degraded one. They are on
+every record so a corpus is self-describing — a degraded page that cannot say
+what was done to it cannot be scored on identifying it — and they are what
+`degraded/ground_truth.jsonl` pools across all seven corpora.
 
 `layout/{stem}.json` carries OmniDocBench-shaped `layout_dets`: element
 boxes, block categories, reading order, and — for every `table` annotation —
