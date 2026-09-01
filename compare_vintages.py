@@ -22,6 +22,7 @@ ARM and x86, which is the likeliest cause of a ±1 pixel difference that changes
 every hash.
 """
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -46,7 +47,36 @@ def _rows(manifest: Path) -> dict[str, dict]:
     return rows
 
 
+def _fingerprint(manifest: Path) -> tuple[int, str]:
+    """One digest over a whole corpus's hashes: page count, and a hash of hashes.
+
+    For comparing two machines that cannot exchange files. The sandbox this was
+    written for has no rsync and no scp -- transfer is a browser upload -- so a
+    corpus's identity has to fit in a line somebody can paste. Equal digests mean
+    every image AND every transcript in that corpus is byte-identical; unequal
+    means at least one differs, and only then is a file worth moving.
+
+    Sorted by stem so the digest describes the corpus rather than the order its
+    manifest happens to be written in.
+    """
+    rows = _rows(manifest)
+    material = "".join(
+        f"{stem}\0{rows[stem]['sha256']}\0{rows[stem].get('transcript_sha256', '')}\n"
+        for stem in sorted(rows)
+    )
+    return len(rows), hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+def _print_fingerprints(root: Path) -> int:
+    for name, manifest in sorted(_manifests(root).items()):
+        pages, digest = _fingerprint(manifest)
+        print(f"{name:34} {pages:>5}  {digest}")
+    return 0
+
+
 def main() -> int:
+    if len(sys.argv) == 3 and sys.argv[1] == "--fingerprint":
+        return _print_fingerprints(Path(sys.argv[2]))
     if len(sys.argv) != 3:
         print(__doc__)
         return 2
