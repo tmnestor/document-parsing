@@ -14,7 +14,9 @@ candidate for the same treatment. One that agrees across machines can stay.
 
 import hashlib
 import sys
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 from PIL import Image
@@ -56,7 +58,8 @@ def main() -> int:
         # immediately before each call so one result cannot depend on another.
         np.random.seed(SEED)
         try:
-            result = factory(**kwargs)(clean.copy())
+            build = cast(Callable[..., Any], factory)
+            result = build(**kwargs)(clean.copy())
         except Exception as exc:
             print(f"{name:20} failed: {exc}")
             continue
