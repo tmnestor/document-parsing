@@ -1,22 +1,31 @@
-"""Which individual augraphy augmentation is not portable across machines?
+"""Which individual augmentation is not portable across machines?
 
 `probe_phases.py` localised cross-machine divergence to the augraphy phase --
 the first thing that runs, before marks, geometry or camera. This narrows it
-further, applying each registered augmentation ALONE to the same clean page.
+further, running each augmentation ALONE through the real `apply_augraphy` path.
+
+Going through `apply_augraphy` is essential rather than convenient. Augraphy's
+augmentations draw from Python's `random`, NumPy's global RNG and OpenCV's RNG,
+and only `AugraphyPipeline(random_seed=...)` plus the explicit `np.random.seed`
+in `apply_augraphy` pin all three. Constructing an augmentation directly and
+seeding NumPy alone gives a DIFFERENT result on every run of the same process,
+which an earlier version of this probe did -- so it measured nothing.
+
+Each case therefore runs twice. If the two disagree the augmentation is not
+reproducible even on one machine, and the cross-machine question does not arise
+for it yet.
 
 The point is to size a fix. `config/degradation.yml` already records that
 `Folding` and `DirtyRollers` were dropped as not reproducible and reimplemented
-in this repository as `marks:`; an augmentation that diverges here is a
-candidate for the same treatment. One that agrees across machines can stay.
+here as `marks:`; an augmentation that diverges across machines is a candidate
+for the same treatment.
 
     python probe_augmentations.py CLEAN_PAGE.png
 """
 
 import hashlib
 import sys
-from collections.abc import Callable
 from pathlib import Path
-from typing import Any, cast
 
 import numpy as np
 from PIL import Image
@@ -24,17 +33,25 @@ from PIL import Image
 REPO = Path(__file__).resolve().parent
 SEED = 12345
 
-# One representative parameter set per augmentation, taken from the shipped
-# tiers so the probe exercises what the corpus actually uses.
-CASES: list[tuple[str, dict]] = [
-    ("InkBleed", {"intensity_range": (0.25, 0.45), "kernel_size": (5, 5)}),
-    ("LightingGradient", {"max_brightness": 235, "direction": 45}),
-    ("ShadowCast", {"shadow_side": "top", "shadow_opacity_range": (0.35, 0.55)}),
+# One representative spec per augmentation, in the shape the YAML declares and
+# taken from the shipped tiers, so the probe exercises what the corpus uses.
+CASES: list[tuple[str, str, dict]] = [
+    ("InkBleed", "ink", {"augmentation": "InkBleed", "intensity": [0.25, 0.45], "kernel": 5}),
+    (
+        "LightingGradient",
+        "paper",
+        {"augmentation": "LightingGradient", "max_brightness": 235, "direction": 45},
+    ),
+    (
+        "ShadowCast",
+        "paper",
+        {"augmentation": "ShadowCast", "side": "top", "opacity": [0.35, 0.55]},
+    ),
 ]
 
 
-def _digest(array: np.ndarray) -> str:
-    return hashlib.sha256(np.ascontiguousarray(array).tobytes()).hexdigest()[:16]
+def _digest(image: Image.Image) -> str:
+    return hashlib.sha256(np.asarray(image.convert("RGB")).tobytes()).hexdigest()[:16]
 
 
 def main() -> int:
@@ -42,28 +59,34 @@ def main() -> int:
         print(__doc__)
         return 2
 
-    from generators.degradation.augment import AUGMENTATIONS
+    from generators.degradation.augment import apply_augraphy
+    from generators.degradation.tiers import Tier
 
     with Image.open(Path(sys.argv[1])) as handle:
-        clean = np.asarray(handle.convert("RGB"))
+        clean = handle.convert("RGB").copy()
     print(f"clean input   {_digest(clean)}\n")
-    print(f"{'augmentation':20} {'output':>18}")
+    print(f"{'augmentation':20} {'output':>18}  stable locally?")
 
-    for name, kwargs in CASES:
-        factory = AUGMENTATIONS.get(name)
-        if factory is None:
-            print(f"{name:20} {'(not registered)':>18}")
-            continue
-        # Augraphy augmentations read numpy's legacy global RNG; seed it
-        # immediately before each call so one result cannot depend on another.
-        np.random.seed(SEED)
+    for name, phase, spec in CASES:
+        tier = Tier(
+            family="probe",
+            name="probe",
+            suffix="probe",
+            description=f"{name} alone",
+            ink=[spec] if phase == "ink" else [],
+            paper=[spec] if phase == "paper" else [],
+            marks=[],
+            geometry={"mode": "skew", "rotation_deg": [0, 0], "margin": [0, 0]},
+            camera={"blur": [0, 0], "noise_sigma": [0, 0], "jpeg": [100, 100]},
+        )
         try:
-            build = cast(Callable[..., Any], factory)
-            result = build(**kwargs)(clean.copy())
+            first = _digest(apply_augraphy(clean.copy(), tier, SEED))
+            second = _digest(apply_augraphy(clean.copy(), tier, SEED))
         except Exception as exc:
             print(f"{name:20} failed: {exc}")
             continue
-        print(f"{name:20} {_digest(np.asarray(result)):>18}")
+        stable = "yes" if first == second else "NO -- not reproducible on one machine"
+        print(f"{name:20} {first:>18}  {stable}")
     return 0
 
 
