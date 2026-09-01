@@ -44,6 +44,16 @@
 # harsher than they are now and pulled back after looking at the output: they
 # should be at the edge of legibility for a human, not past it.
 #
+# A LADDER MUST NOT REVERSE. Pulling a rung back is a judgement call; pulling it
+# back PAST the rung below it is a bug, and one that hides well -- a tier whose
+# blur and warp still rise reads as monotonic on a sharpness metric while the
+# lighting quietly improves. `photo-heavy` shipped that way once (see its
+# ShadowCast below). Every dimension that means "worse" when it grows must be
+# non-decreasing across a family's rungs, and `jpeg` -- a quality number, so it
+# runs the other way -- non-increasing. Pinned by
+# tests/test_degradation_ladder_monotonic.py, which compares each rung to the
+# one below it rather than checking each in isolation.
+#
 # DELIBERATELY NOT USED, part 3: DirtyDrum. It is reproducible, and it is still
 # registered in augment.py, but at every setting tried -- including its gentlest
 # -- it lays broad black bars both across and down the page rather than the fine
@@ -214,8 +224,18 @@ families:
             max_brightness: 235
             direction: 45
           - augmentation: ShadowCast
+            # STRICTLY DARKER THAN MODERATE'S [0.25, 0.45]. It used to be
+            # [0.22, 0.38], which made the hardest rung the better-lit one:
+            # measured over 40 statements, photo-heavy's darkest decile came
+            # out at 143.8 against moderate's 131.2, and its lighting spread
+            # at 57.2 against 64.0. Blur and warp still fell correctly, so the
+            # ladder read as monotonic on a sharpness metric while reversing
+            # on the dimension a human reader actually feels.
+            # `side` differs from moderate's on purpose -- the shadow should
+            # not fall in the same corner at every severity -- but direction
+            # is not severity, and only opacity carries the rung.
             side: top
-            opacity: [0.22, 0.38]
+            opacity: [0.35, 0.55]
         marks:
           - mark: fold_ridges
             count: [2, 3]
