@@ -76,9 +76,10 @@ flat per-page images alongside `ground_truth.jsonl` and `ground_truth.csv` —
 for information-extraction rather than full-page transcription. It is written
 by `generators/extraction_export.py`.
 
-Nothing is downloaded and nothing is installed beyond the environment and
-(for `DEGRADE=yes`) `augraphy`, which `build_corpus.sh` installs and verifies
-itself — see "Reproducibility" below for why that step exists.
+Nothing is downloaded and nothing is installed beyond the environment.
+`environment.yml` pins every runtime dependency directly, degradation
+included, with no separate install step and no post-install verification to
+run.
 
 ## Document types and layouts
 
@@ -115,13 +116,29 @@ pinned by
 If a change moves a single pixel, that is a corpus revision — predictions
 already scored against the previous vintage are no longer valid.
 
-Degradation is pinned the same way, down to the OpenCV build: `augraphy`
-declares the GUI `opencv-python` as a hard requirement, which would displace
-the pinned headless build and silently produce a different corpus under the
-same seed (measured: 2 of 9 degraded images differ between builds).
-`build_corpus.sh` installs `augraphy` with `--no-deps` and then verifies only
-the headless build is present, rather than documenting the step and trusting
-it was followed.
+Reproducibility has to hold **across machines**, not just across runs on one —
+this corpus is built by more than one team, on more than one host. Two
+defects, once found, threatened that: Pillow silently choosing a different
+text-layout engine per platform, and the degradation pipeline computing pixels
+with functions IEEE-754 does not guarantee are portable. Both are closed:
+
+- **Text layout is pinned to `Layout.BASIC`** (`generators/common.py`). Left
+  unset, Pillow picks Raqm when the wheel bundles it and Basic when it does
+  not, so the same font laid the same text out differently on macOS and Linux
+  — different glyph shaping, different pixels, before degradation even runs.
+- **The degraded pixel path uses only `+ - * /`, `sqrt`, comparisons and
+  integer arithmetic** — the operations IEEE-754 requires every conforming
+  platform to round identically — and never `exp`, `log`, `pow`, `sin` or
+  `cos`, which come from the platform's libm and were measured to differ in
+  their final bits between glibc and Apple's. The ink and paper effects
+  (`InkBleed`, `LightingGradient`, `ShadowCast`) are this project's own
+  re-derivation for exactly that reason, not a third-party library's — see
+  `generators/degradation/effects.py` and
+  `docs/superpowers/specs/2026-09-01-cross-machine-determinism-design.md`.
+
+This closes the known causes of cross-machine divergence; it has not yet been
+re-verified end to end on two machines since the fix. `probe_phases.py` and
+`probe_augmentations.py` exist to run that check.
 
 ## Why the labels can be trusted
 
