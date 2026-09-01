@@ -81,8 +81,18 @@ families:
         suffix: scan1
         description: A well-maintained office scanner, lightly compressed.
         ink:
+          # LIGHTENED so this rung matches its own description -- but note what
+          # that did NOT fix. scan-light used to retain 0.293 of the clean
+          # page's stroke detail against scan-moderate's 0.282: a step of
+          # 0.981, so moderate was nearly a no-op, and on 29 of 61 pages it
+          # came out SHARPER than light. Cleaning this tier's ink, blur and
+          # JPEG moved it only to 0.318, because most of the loss is not here:
+          # the skew resamples the whole page bilinearly, and every tier pays
+          # that once. ~0.3 is the floor for anything with geometry, so the
+          # ladder has to be opened downward, on moderate and heavy, not
+          # upward on light.
           - augmentation: InkBleed
-            intensity: [0.03, 0.10]
+            intensity: [0.02, 0.06]
             kernel: 3
         paper:
           - augmentation: LightingGradient
@@ -94,9 +104,9 @@ families:
           rotation_deg: [-0.8, 0.8]
           margin: [0.01, 0.02]
         camera:
-          blur: [0.1, 0.3]
+          blur: [0.05, 0.15]
           noise_sigma: [1, 2]
-          jpeg: [88, 96]
+          jpeg: [92, 98]
 
       - name: moderate
         suffix: scan2
@@ -104,8 +114,11 @@ families:
           A worn ADF: roller streaks down the feed direction, lamp falloff to
           one side, heavier compression.
         ink:
+          # DEEPENED to put a real step between light and moderate. See the
+          # note on scan-light: this rung sat at 0.307 of clean against
+          # light's 0.318, which is no step at all.
           - augmentation: InkBleed
-            intensity: [0.10, 0.22]
+            intensity: [0.14, 0.28]
             kernel: 3
         paper:
           - augmentation: LightingGradient
@@ -113,17 +126,17 @@ families:
             direction: 45
         marks:
           - mark: roller_streaks
-            count: [2, 5]
+            count: [3, 6]
             width: [4, 11]
-            strength: [0.04, 0.10]
+            strength: [0.07, 0.15]
         geometry:
           mode: skew
           rotation_deg: [-2.0, 2.0]
           margin: [0.01, 0.03]
         camera:
-          blur: [0.3, 0.6]
-          noise_sigma: [2, 4]
-          jpeg: [70, 85]
+          blur: [0.5, 0.95]
+          noise_sigma: [3, 5]
+          jpeg: [62, 78]
 
       - name: heavy
         suffix: scan3
@@ -133,8 +146,12 @@ families:
           break small digits first -- and it is meant to be readable, with
           effort, or it discriminates between nothing.
         ink:
+          # MOVED DOWN with moderate, to keep the top of the ladder a real step
+          # below it rather than being overtaken. Still bounded by the rule
+          # above: readable with effort. photo-heavy already runs blur to 2.0
+          # and stays legible, so 1.8 here is inside proven ground.
           - augmentation: InkBleed
-            intensity: [0.20, 0.35]
+            intensity: [0.26, 0.44]
             kernel: 5
         paper:
           - augmentation: LightingGradient
@@ -142,17 +159,17 @@ families:
             direction: 45
         marks:
           - mark: roller_streaks
-            count: [4, 8]
-            width: [6, 18]
-            strength: [0.10, 0.22]
+            count: [5, 10]
+            width: [8, 22]
+            strength: [0.16, 0.32]
         geometry:
           mode: skew
           rotation_deg: [-3.5, 3.5]
           margin: [0.02, 0.04]
         camera:
-          blur: [0.6, 1.1]
-          noise_sigma: [5, 8]
-          jpeg: [40, 60]
+          blur: [1.0, 1.8]
+          noise_sigma: [6, 10]
+          jpeg: [32, 50]
 
   # ------------------------------------------------------------------ photo
   photo:
