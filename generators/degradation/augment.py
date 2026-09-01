@@ -23,7 +23,13 @@ from collections.abc import Callable
 import numpy as np
 from PIL import Image
 
-from generators.degradation.effects import InkBleed, LightingGradient, ShadowCast, ThermalFade
+from generators.degradation.effects import (
+    THERMAL_FADE_PATTERNS,
+    InkBleed,
+    LightingGradient,
+    ShadowCast,
+    ThermalFade,
+)
 from generators.degradation.tiers import Tier
 
 # What a constructed effect looks like: called with the frame and the phase's
@@ -72,7 +78,7 @@ _PARAM_NAMES: dict[str, dict[str, str]] = {
     "InkBleed": {"intensity": "intensity_range", "kernel": "kernel_size"},
     "LightingGradient": {"max_brightness": "max_brightness", "direction": "direction"},
     "ShadowCast": {"side": "shadow_side", "opacity": "shadow_opacity_range"},
-    "ThermalFade": {"strength": "strength_range", "direction": "direction"},
+    "ThermalFade": {"strength": "strength_range", "patterns": "patterns"},
 }
 
 # Meta-keys every spec may carry that are not constructor parameters:
@@ -141,12 +147,48 @@ def _build(spec: dict, *, tier: Tier, phase: str) -> Effect:
             f"  Where:    config/degradation.yml -> {where}\n"
             "  Expected: a non-empty list of document types, e.g.\n"
             "              {augmentation: ThermalFade, strength: [0.10, 0.25], "
-            "direction: 90,\n"
+            "patterns: [uniform, top],\n"
             "               doc_types: [receipts]}\n"
             f"  Recover:  add 'doc_types:' to the {name} entry of tier '{tier.label}', "
             "naming which document types this effect applies to -- "
             "[bank_statements, receipts, invoices] for an effect that applies to all of them."
         )
+
+    # `patterns:` is ThermalFade-specific -- the fade geometries a page may draw
+    # from -- and validated here rather than left to the generic parameter loop
+    # below, so an empty list or an unknown geometry name gets a diagnostic that
+    # names the offending tier and phase, not a bare TypeError or KeyError at
+    # render time.
+    if str(name) == "ThermalFade":
+        patterns = spec.get("patterns")
+        if not isinstance(patterns, list) or not patterns:
+            raise AugmentationError(
+                "Invalid augmentation spec.\n"
+                f"  What:     the ThermalFade entry in the {phase} phase of tier "
+                f"'{tier.label}' has no 'patterns:' key, so there is nothing to sample a "
+                "fade geometry from.\n"
+                f"  Where:    config/degradation.yml -> {where}\n"
+                f"  Expected: a non-empty list drawn from {sorted(THERMAL_FADE_PATTERNS)}, "
+                "e.g.\n"
+                "              {augmentation: ThermalFade, strength: [0.10, 0.25],\n"
+                "               patterns: [uniform, top, bottom, left, right],\n"
+                "               doc_types: [receipts]}\n"
+                f"  Recover:  add 'patterns:' to the ThermalFade entry of tier "
+                f"'{tier.label}'."
+            )
+        unknown = sorted(set(patterns) - THERMAL_FADE_PATTERNS)
+        if unknown:
+            raise AugmentationError(
+                "Invalid augmentation spec.\n"
+                f"  What:     the ThermalFade entry in the {phase} phase of tier "
+                f"'{tier.label}' names pattern(s) {unknown} in 'patterns:', which this "
+                "pipeline does not implement.\n"
+                f"  Where:    config/degradation.yml -> {where}.patterns\n"
+                f"  Expected: every entry in 'patterns:' to be one of "
+                f"{sorted(THERMAL_FADE_PATTERNS)}.\n"
+                f"  Recover:  remove or correct {unknown} in the ThermalFade entry of tier "
+                f"'{tier.label}'."
+            )
 
     mapping = _PARAM_NAMES[str(name)]
     kwargs: dict[str, object] = {}

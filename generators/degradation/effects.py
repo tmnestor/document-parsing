@@ -212,39 +212,92 @@ class InkBleed:
         return blended.astype(np.uint8)
 
 
+# The fade geometries ThermalFade may draw from. "uniform" is a flat field --
+# the whole receipt fades evenly, no ramp -- and is deliberately in this set
+# rather than a special case in code, because a receipt fading in storage
+# heat, not from one edge in a wallet, is the common real case. The four
+# directional names reuse `_SIDES`: the same "which edge is heavier" mapping
+# ShadowCast already draws its ramp from.
+THERMAL_FADE_PATTERNS = frozenset({"uniform", *_SIDES})
+
+
 class ThermalFade:
-    """A thermal receipt's print fading toward paper white, heavier at one edge.
+    """A thermal receipt's print fading toward paper white, in one of several ways.
 
     Thermal coating reacts to heat and UV first, then moisture, skin and plastic
-    oils, and friction, and it fades unevenly rather than as a flat contrast
-    loss -- commonly heavier toward one edge of the roll. Modelled as a
-    directional ramp blended toward white: a pixel already close to white barely
-    moves, and one far from white (ink) moves more for the same ramp value,
-    which is why ink visibly fades before the paper does on a real receipt.
+    oils, and friction. Real receipts fade several different ways -- uniformly
+    from age and storage heat, or heavier toward one edge where the receipt
+    stuck out of a wallet or got handled -- so every call samples ONE pattern
+    from the declared set rather than a tier fading every page identically.
+    Directional patterns are modelled as a ramp blended toward white: a pixel
+    already close to white barely moves, and one far from white (ink) moves
+    more for the same ramp value, which is why ink visibly fades before the
+    paper does on a real receipt. `uniform` is the same blend with no ramp.
 
     Args:
         strength_range: Range to sample the fade's peak intensity from, 0
             (untouched) to 1 (the faded edge blends fully to white).
-        direction: Angle of the fade in degrees, passed straight to `_ramp`.
+        patterns: The fade geometries to sample from, one per call -- e.g.
+            `("uniform", "top", "bottom", "left", "right")`. Must be non-empty
+            and drawn from `THERMAL_FADE_PATTERNS`.
     """
 
-    def __init__(self, strength_range: tuple[float, float], direction: int) -> None:
+    def __init__(self, strength_range: tuple[float, float], patterns: tuple[str, ...]) -> None:
         self.strength_range = (float(strength_range[0]), float(strength_range[1]))
-        self.direction = int(direction)
+        self.patterns = tuple(patterns)
 
     def __call__(self, image: np.ndarray, rng: np.random.Generator) -> np.ndarray:
         """Apply the fade effect to the image.
 
         Args:
             image: Input image array.
-            rng: Seeded random generator for sampling strength.
+            rng: Seeded random generator for sampling strength and pattern.
 
         Returns:
             Degraded image with the same shape and dtype as the input.
+
+        Raises:
+            ValueError: `patterns` is empty, or names a pattern outside
+                `THERMAL_FADE_PATTERNS`.
         """
+        if not self.patterns:
+            raise ValueError(
+                """What: ThermalFade was given an empty 'patterns:' list, so there is nothing to
+      sample a fade geometry from.
+Where: config/degradation.yml, in a paper-phase ThermalFade entry.
+Expected: a non-empty list drawn from """
+                f"{sorted(THERMAL_FADE_PATTERNS)}, e.g.\n"
+                """  - augmentation: ThermalFade
+    strength: [0.10, 0.25]
+    patterns: [uniform, top, bottom, left, right]
+    doc_types: [receipts]
+Recover: add at least one pattern to that entry's 'patterns:' list."""
+            ) from None
+
         height, width = image.shape[:2]
-        ramp = _ramp(height, width, self.direction)
         strength = float(rng.uniform(*self.strength_range))
+        # One integer draw selects the page's fade geometry -- the same
+        # "sample an index, then look it up" shape `skew_on_platen` already
+        # uses for its edge choice in geometry.py.
+        pattern = self.patterns[int(rng.integers(0, len(self.patterns)))]
+
+        if pattern == "uniform":
+            ramp = np.ones((height, width), dtype=np.float64)
+        elif pattern in _SIDES:
+            axis, sign = _SIDES[pattern]
+            ramp = _ramp(height, width, 0 if axis else 90)
+            if sign > 0:
+                ramp = 1.0 - ramp
+        else:
+            raise ValueError(
+                f"""What: ThermalFade's 'patterns:' names '{pattern}', which is not a fade
+      geometry this pipeline implements.
+Where: config/degradation.yml, in a paper-phase ThermalFade entry.
+Expected: every entry in 'patterns:' to be one of """
+                f"{sorted(THERMAL_FADE_PATTERNS)}.\n"
+                f"Recover: remove or correct '{pattern}' in that entry's 'patterns:' list."
+                ""
+            ) from None
 
         # A uint8 fade field, built the same way ShadowCast's mask is: clip and
         # round is the only place a float touches a pixel value.

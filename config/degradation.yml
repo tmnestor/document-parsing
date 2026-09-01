@@ -109,11 +109,16 @@ families:
           # meaning on a laser/inkjet bank statement or invoice, which is what
           # `doc_types: [receipts]` gates. LAST in this list on purpose: every
           # earlier effect's draws stay exactly what they were before this
-          # effect existed. These ranges are a first guess, not yet tuned
-          # against any model's scores.
+          # effect existed. `patterns:` is sampled per page rather than fixed
+          # per tier, because real receipts fade several different ways --
+          # uniformly with storage heat, or heavier toward whichever edge stuck
+          # out of a wallet -- and a whole tier fading identically would read
+          # as synthetic. The same five patterns are declared everywhere below;
+          # both the strength ranges and this set are a first guess, not yet
+          # tuned against any model's scores.
           - augmentation: ThermalFade
             strength: [0.10, 0.25]
-            direction: 90
+            patterns: [uniform, top, bottom, left, right]
             doc_types: [receipts]
         marks: []          # a well-maintained scanner leaves no roller marks
         geometry:
@@ -147,7 +152,7 @@ families:
           # this list, same reason. First guess, not yet tuned.
           - augmentation: ThermalFade
             strength: [0.25, 0.45]
-            direction: 45
+            patterns: [uniform, top, bottom, left, right]
             doc_types: [receipts]
         marks:
           - mark: roller_streaks
@@ -188,7 +193,7 @@ families:
           # this list, same reason. First guess, not yet tuned.
           - augmentation: ThermalFade
             strength: [0.45, 0.65]
-            direction: 45
+            patterns: [uniform, top, bottom, left, right]
             doc_types: [receipts]
         marks:
           - mark: roller_streaks
@@ -231,7 +236,7 @@ families:
           # First guess, not yet tuned against any model's scores.
           - augmentation: ThermalFade
             strength: [0.10, 0.25]
-            direction: 90
+            patterns: [uniform, top, bottom, left, right]
             doc_types: [receipts]
         marks: []          # a flat, unfolded page
         geometry:
@@ -265,7 +270,7 @@ families:
           # this list, same reason. First guess, not yet tuned.
           - augmentation: ThermalFade
             strength: [0.25, 0.45]
-            direction: 45
+            patterns: [uniform, top, bottom, left, right]
             doc_types: [receipts]
         marks: []          # still unfolded; the damage here is light and angle
         geometry:
@@ -311,7 +316,7 @@ families:
           # this list, same reason. First guess, not yet tuned.
           - augmentation: ThermalFade
             strength: [0.45, 0.65]
-            direction: 45
+            patterns: [uniform, top, bottom, left, right]
             doc_types: [receipts]
         marks:
           - mark: fold_ridges
