@@ -210,3 +210,50 @@ class InkBleed:
         toward = spread.astype(np.int32)
         blended = (base * (255 - weight) + toward * weight + 127) // 255
         return blended.astype(np.uint8)
+
+
+class ThermalFade:
+    """A thermal receipt's print fading toward paper white, heavier at one edge.
+
+    Thermal coating reacts to heat and UV first, then moisture, skin and plastic
+    oils, and friction, and it fades unevenly rather than as a flat contrast
+    loss -- commonly heavier toward one edge of the roll. Modelled as a
+    directional ramp blended toward white: a pixel already close to white barely
+    moves, and one far from white (ink) moves more for the same ramp value,
+    which is why ink visibly fades before the paper does on a real receipt.
+
+    Args:
+        strength_range: Range to sample the fade's peak intensity from, 0
+            (untouched) to 1 (the faded edge blends fully to white).
+        direction: Angle of the fade in degrees, passed straight to `_ramp`.
+    """
+
+    def __init__(self, strength_range: tuple[float, float], direction: int) -> None:
+        self.strength_range = (float(strength_range[0]), float(strength_range[1]))
+        self.direction = int(direction)
+
+    def __call__(self, image: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+        """Apply the fade effect to the image.
+
+        Args:
+            image: Input image array.
+            rng: Seeded random generator for sampling strength.
+
+        Returns:
+            Degraded image with the same shape and dtype as the input.
+        """
+        height, width = image.shape[:2]
+        ramp = _ramp(height, width, self.direction)
+        strength = float(rng.uniform(*self.strength_range))
+
+        # A uint8 fade field, built the same way ShadowCast's mask is: clip and
+        # round is the only place a float touches a pixel value.
+        fade = np.clip(ramp * strength * 255.0 + 0.5, 0, 255).astype(np.uint8)
+
+        base = image.astype(np.int32)
+        fade_i = fade.astype(np.int32)[:, :, None]
+        # Exact integer blend toward white. At fade 0 the pixel is untouched; at
+        # fade 255 it is pure white. Ink starts further from 255 than paper
+        # does, so it moves more under the same fade -- the chemistry does the
+        # same thing, unprompted by anything in this formula.
+        return (base + ((255 - base) * fade_i + 127) // 255).astype(np.uint8)
