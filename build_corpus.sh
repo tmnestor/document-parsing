@@ -14,7 +14,6 @@ set -uo pipefail
 ENV_NAME=${ENV_NAME:-docparse}
 DATE_STAMP=${DATE_STAMP:-$(date +%Y%m%d)}
 DEGRADE=${DEGRADE:-yes}
-AUGRAPHY_VERSION=8.2.6
 
 # Derived from the SCRIPT's location, not the working directory, so it resolves
 # the same however the script is invoked.
@@ -41,23 +40,7 @@ if ! conda env list | grep -qE "^${ENV_NAME}\s"; then
     conda env create -f environment.yml || fail "could not create '$ENV_NAME'"
 fi
 
-# augraphy declares the GUI opencv-python as a hard requirement, which would
-# displace the headless build. Both provide cv2, and having both installed is a
-# coin toss over which one wins -- 2 of 9 degraded images come out different,
-# and generators/degradation/geometry.py refuses to run in that state rather
-# than writing a corpus that will not reproduce. So: install it without its
-# dependencies, then VERIFY, rather than telling a human to check.
-if ! conda run -n "$ENV_NAME" python -c 'import augraphy' >/dev/null 2>&1; then
-    echo "installing augraphy==$AUGRAPHY_VERSION --no-deps"
-    conda run -n "$ENV_NAME" pip install --no-deps "augraphy==$AUGRAPHY_VERSION" ||
-        fail "could not install augraphy"
-fi
-gui=$(conda run -n "$ENV_NAME" pip list 2>/dev/null | grep -ci '^opencv-python ' || true)
-[[ $gui -eq 0 ]] || fail "both opencv builds are installed in '$ENV_NAME'.
-   cv2 would resolve unpredictably and degraded images would not reproduce.
-   Fix:  conda run -n $ENV_NAME pip uninstall -y opencv-python
-         conda run -n $ENV_NAME pip install --no-deps augraphy==$AUGRAPHY_VERSION"
-conda run -n "$ENV_NAME" python -c 'import cv2, augraphy, numpy' ||
+conda run -n "$ENV_NAME" python -c 'import cv2, numpy' ||
     fail "'$ENV_NAME' cannot import the degradation stack"
 
 mkdir -p "$TARGET" || fail "cannot create $TARGET"

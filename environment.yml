@@ -1,18 +1,8 @@
 # One environment. Everything the corpus needs: rendering, degradation, tests.
 #
-# AUGRAPHY IS NOT LISTED HERE. It declares `opencv-python` — the full GUI
-# build — as a hard requirement, which would displace the headless build
-# pinned below. Both provide `cv2`, and having both installed is a coin toss
-# over which one wins: 2 of 9 degraded images come out different, and
-# generators/degradation/geometry.py refuses to run in that state rather than
-# writing a corpus that will not reproduce. `build_corpus.sh` installs it with
-# --no-deps and verifies the result; conda's pip: section applies flags to the
-# whole invocation, so it cannot be scoped to one package here.
-#
 # PINS ARE EXACT, NOT PREFERENCES. Degraded images are corpus data: their
 # hashes go in a manifest, and a version bump that shifts one pixel
-# invalidates every prediction made against the old images. numpy is
-# additionally capped by numba, which augraphy imports.
+# invalidates every prediction made against the old images.
 name: docparse
 
 channels:
@@ -28,19 +18,19 @@ dependencies:
       - rich==14.3.0
       - faker
 
-      # Degradation. augraphy itself is installed by build_corpus.sh, with
-      # --no-deps, so its real runtime imports have to be listed here by hand.
-      # `requests` and `matplotlib` are both actually imported at
-      # `import augraphy` time (figsharedownloader.py, scribbles.py) even
-      # though neither does anything for this corpus — verified by importing
-      # augraphy against this file with nothing else installed.
+      # Degradation (generators/degradation/). numpy and opencv are the only
+      # runtime dependencies the re-derived ink, paper, geometry and camera
+      # effects need — see generators/degradation/effects.py and geometry.py.
+      # This used to also pin numba, scikit-image, scikit-learn, requests and
+      # matplotlib, as the runtime imports of a third-party paper-damage
+      # library this project no longer depends on (see
+      # docs/superpowers/specs/2026-09-01-cross-machine-determinism-design.md
+      # §3); those five are removed because nothing in this repository
+      # imports any of them — verified with:
+      #   grep -rn "skimage\|sklearn\|matplotlib\|requests\|numba" \
+      #       --include="*.py" generators/ scoring/ *.py
       - numpy==2.3.5
       - opencv-python-headless==4.13.0.92
-      - numba==0.66.0
-      - scikit-image
-      - scikit-learn
-      - requests
-      - matplotlib
 
       # Tooling.
       - pytest

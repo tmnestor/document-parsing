@@ -26,17 +26,22 @@
 # reader unable to tell a decision from an oversight.
 #
 # Augmentation names must be registered in generators/degradation/augment.py.
-# The registry is an allow-list rather than a passthrough to Augraphy's whole
-# catalogue, so a typo here becomes a startup diagnostic naming the valid
-# options.
+# `InkBleed`, `LightingGradient` and `ShadowCast` are this project's own
+# re-derivation, not the Augraphy library's — Augraphy evaluated transcendental
+# functions (its libm), which glibc and Apple's libm do not agree on, so the
+# same seed produced different pixels on Linux and macOS. The registry stays an
+# allow-list rather than a passthrough to a whole catalogue, so a typo here
+# becomes a startup diagnostic naming the valid options. See
+# generators/degradation/effects.py and
+# docs/superpowers/specs/2026-09-01-cross-machine-determinism-design.md.
 #
-# DELIBERATELY NOT USED, part 1 -- NOT REPRODUCIBLE. `Folding` and
-# `DirtyRollers` produce exactly the artefacts this study wants, and neither is
-# seedable: with p=1 and every documented RNG seeded, five runs at one seed give
-# five different images, because both delegate to numba-compiled helpers whose
-# state nothing reaches. Their artefacts are provided instead by `marks:` below,
-# implemented in generators/degradation/geometry.py and drawing all randomness
-# from the tier's own seeded generator.
+# ROLLER STREAKS AND FOLD RIDGES ARE ALSO THIS PROJECT'S OWN. Augraphy's
+# `Folding` and `DirtyRollers` produced exactly the artefacts this study wants
+# but were not seedable — five runs at one seed gave five different images,
+# because both delegated to helpers whose RNG state nothing reached. Their
+# artefacts are provided instead by `marks:` below, implemented in
+# generators/degradation/geometry.py and drawing all randomness from the
+# tier's own seeded generator.
 #
 # A TIER MUST DISCRIMINATE. The point of a severity ladder is to find where a
 # system breaks, so a tier that no system can read measures nothing -- it adds a
@@ -53,20 +58,6 @@
 # runs the other way -- non-increasing. Pinned by
 # tests/test_degradation_ladder_monotonic.py, which compares each rung to the
 # one below it rather than checking each in isolation.
-#
-# DELIBERATELY NOT USED, part 3: DirtyDrum. It is reproducible, and it is still
-# registered in augment.py, but at every setting tried -- including its gentlest
-# -- it lays broad black bars both across and down the page rather than the fine
-# drum streaking the name suggests. It removed more of the page than the rest of
-# the heavy tier put together. The severity it was there for is supplied by
-# stronger roller streaks and harsher optics instead.
-#
-# DELIBERATELY NOT USED, part 2: BleedThrough, PageBorder and BookBinding. All three
-# *read* images from Augraphy's on-disk cache and composite whatever the last
-# run left behind, which makes output depend on directory state rather than on
-# the seed. Showthrough from the reverse of a page is a real scanner artefact
-# and would be worth having; it is excluded because this implementation of it
-# is not reproducible.
 
 families:
 
