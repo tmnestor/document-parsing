@@ -59,7 +59,7 @@ def main() -> int:
         print(__doc__)
         return 2
 
-    from generators.degradation.augment import apply_augraphy
+    from generators.degradation.augment import apply_effects
     from generators.degradation.tiers import Tier
 
     with Image.open(Path(sys.argv[1])) as handle:
@@ -80,8 +80,8 @@ def main() -> int:
             camera={"blur": [0, 0], "noise_sigma": [0, 0], "jpeg": [100, 100]},
         )
         try:
-            first = _digest(apply_augraphy(clean.copy(), tier, SEED))
-            second = _digest(apply_augraphy(clean.copy(), tier, SEED))
+            first = _digest(apply_effects(clean.copy(), tier, SEED))
+            second = _digest(apply_effects(clean.copy(), tier, SEED))
         except Exception as exc:
             print(f"{name:20} failed: {exc}")
             continue

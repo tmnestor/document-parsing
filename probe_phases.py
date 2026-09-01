@@ -42,7 +42,7 @@ def main() -> int:
         return 2
     page_path = Path(sys.argv[1])
 
-    from generators.degradation.augment import apply_augraphy
+    from generators.degradation.augment import apply_effects
     from generators.degradation.geometry import (
         apply_marks,
         apply_photometrics,
@@ -57,7 +57,7 @@ def main() -> int:
     print(f"{'tier':16} {'augraphy':>17} {'marks':>17} {'geometry':>17} {'camera':>17}")
 
     for tier in load_tiers(CONFIG):
-        augmented = apply_augraphy(clean.copy(), tier, SEED)
+        augmented = apply_effects(clean.copy(), tier, SEED)
         after_augraphy = _digest(augmented)
 
         rng = np.random.default_rng(SEED)

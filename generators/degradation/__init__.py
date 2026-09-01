@@ -91,7 +91,7 @@ def degrade_page(image: "Image.Image", tier: Tier, seed: int) -> "Image.Image":
     """
     import numpy as np
 
-    from generators.degradation.augment import apply_augraphy
+    from generators.degradation.augment import apply_effects
     from generators.degradation.geometry import (
         apply_marks,
         apply_photometrics,
@@ -105,7 +105,7 @@ def degrade_page(image: "Image.Image", tier: Tier, seed: int) -> "Image.Image":
     # avoid.
     check_opencv()
 
-    augmented = apply_augraphy(image, tier, seed)
+    augmented = apply_effects(image, tier, seed)
     rng = np.random.default_rng(seed)
 
     # Our own paper effects, after Augraphy and still on the flat page, so a
