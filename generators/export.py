@@ -75,20 +75,35 @@ def sha256_of(path: Path) -> str:
 def pixels_sha256_of(path: Path) -> str:
     """Hash an image's decoded RGB pixels, independent of its encoding.
 
-    Identity of the IMAGE, not of the file. PNG is lossless, so a
-    different zlib compresses identical pixels into different bytes --
-    measured: zlib-ng 1.3.1 and zlib 1.3.2 disagree on every page. The
-    byte hash still catches a truncated transfer; this is what a vintage
-    check compares.
+    Identity of the IMAGE, not of the file: what survives a re-encode of the
+    same pixels. That is what the byte hash cannot do -- a different zlib
+    compresses identical pixels into different bytes (measured: zlib-ng 1.3.1
+    and zlib 1.3.2 disagree on every page), so a legitimately rebuilt corpus
+    fails a byte comparison. The byte hash still earns its place; it catches a
+    truncated or corrupted transfer, which a decode-then-hash cannot see.
+
+    Note the claim is about the ENCODER, not about losslessness. Clean pages are
+    PNG, so their pixels round-trip exactly; degraded pages are JPEG, where the
+    pixels a decoder returns are the image and re-encoding them would not
+    reproduce this digest. Both cases hold, because what is hashed is the
+    decoded result either way.
+
+    Dimensions and mode are hashed as a prefix, `f"{mode}{width}x{height}"`,
+    before the pixel bytes. Without it two pages whose byte runs coincide under
+    transposed dimensions -- a 200x300 and a 300x200 -- digest identically, and
+    the field's whole job is to tell two images apart.
 
     Args:
         path: Path to the image file.
 
     Returns:
-        The hex digest of the RGB pixel bytes.
+        The hex digest of the mode/size prefix plus the RGB pixel bytes.
     """
     with Image.open(path) as handle:
-        return hashlib.sha256(handle.convert("RGB").tobytes()).hexdigest()
+        rgb = handle.convert("RGB")
+        digest = hashlib.sha256(f"{rgb.mode}{rgb.width}x{rgb.height}".encode())
+        digest.update(rgb.tobytes())
+        return digest.hexdigest()
 
 
 def _missing(kind: str, path: Path, *, recover_command: str) -> ExportError:
@@ -405,19 +420,38 @@ cross-benchmark comparison it cannot support.
 
 ## Verify before you score
 
-Check every image against its `sha256` **and every transcript against its
-`transcript_sha256`** in `manifest.jsonl` before scoring.
+Every manifest row carries **three** hashes, and they answer different questions.
 
-This is not ceremony. Scoring a run against the wrong-vintage ground truth is
-the failure this manifest exists to prevent: filenames alone can match well
-enough to produce a plausible number while comparing the wrong pages. If a hash
-does not match, the corpus and the predictions are not the same vintage, and any
-score from them is meaningless.
+| Field | Over what | What a mismatch means |
+| --- | --- | --- |
+| `pixels_sha256` | the image's decoded pixels | **A different image.** This identifies the page. |
+| `sha256` | the image file's bytes | A different *file*: a truncated copy, or a re-encode. |
+| `transcript_sha256` | the transcript file's bytes | Different ground truth for the same page. |
 
-The transcript hash matters independently of the image hash. Re-emitting the
-corpus under a changed serialisation policy moves no pixel, so every image hash
-still matches while the ground truth has changed underneath. An image hash alone
-cannot see that; the transcript hash can.
+**Check `pixels_sha256` and `transcript_sha256` before scoring.** Those two are
+the vintage. This is not ceremony: scoring a run against the wrong-vintage
+ground truth is the failure this manifest exists to prevent, because filenames
+alone can match well enough to produce a plausible number while comparing the
+wrong pages.
+
+`pixels_sha256` is computed as the sha256 of a mode-and-size prefix followed by
+the decoded RGB pixel bytes, in row-major order, three bytes per pixel — in
+Python, `sha256(f"RGB{{w}}x{{h}}".encode() + Image.open(p).convert("RGB").tobytes())`.
+Any language works; nothing here depends on Pillow. Decode the file, convert to
+8-bit RGB, then hash `"RGB"`, the width, `"x"`, the height, and the pixels.
+
+**Do not reject a corpus because `sha256` differs.** The byte hash is not the
+image's identity. PNG encoders disagree about how to compress identical pixels —
+measured, zlib-ng 1.3.1 and zlib 1.3.2 produce different files for every page of
+this corpus — so a corpus rebuilt from the same inputs on another machine is the
+same corpus with different bytes. `pixels_sha256` matches there and `sha256`
+does not. Use `sha256` to confirm a *transfer* arrived intact, and
+`pixels_sha256` to confirm you are scoring the pages you think you are.
+
+The transcript hash matters independently of both. Re-emitting the corpus under
+a changed serialisation policy moves no pixel, so every image hash still matches
+while the ground truth has changed underneath. An image hash alone cannot see
+that; the transcript hash can.
 
 ## How to score
 
