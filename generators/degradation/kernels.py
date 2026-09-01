@@ -109,11 +109,17 @@ def blur_sigma(plane: np.ndarray, sigma: float, passes: int = 3) -> np.ndarray:
 
     A box cascade alone quantises to integer radii, so every sub-pixel sigma
     collapsed to no blur at all (see `radius_for_sigma`). Variances add, so this
-    takes the largest box that fits, then makes up the residual with single-pass
-    boxes and one 3-tap, landing on the requested variance rather than on the
-    nearest representable radius. Measured against `cv2.GaussianBlur` across the
-    whole declared range, the ratio of standard deviations stays within
-    0.92-1.00.
+    takes the largest cascade that fits, then covers the residual with at most a
+    few single-pass boxes sized for it and one 3-tap, landing on the requested
+    variance rather than on the nearest representable radius. Measured against
+    `cv2.GaussianBlur`, the ratio of standard deviations stays within 0.97-1.01
+    at and above a pixel; below one it blurs somewhat harder, because a sampled
+    Gaussian loses its own variance there.
+
+    The pass count is bounded and does not grow with sigma. That is a
+    requirement, not an incidental property: the warp shadow asks for sigma ~70
+    on a full page, and a residual loop that stepped by radius 1 ran ~105 passes
+    over it, which put a corpus build at six hours instead of ten minutes.
 
     Args:
         plane: 2-D uint8 array.
@@ -136,9 +142,20 @@ def blur_sigma(plane: np.ndarray, sigma: float, passes: int = 3) -> np.ndarray:
     out = box_blur(plane, r, passes).astype(np.float64) if r > 0 else plane.astype(np.float64)
 
     residual = target - _vbox(r)
-    while residual >= 0.5:
-        out = _blur_axis(_blur_axis(out.astype(np.int64), 1, 0), 1, 1).astype(np.float64)
-        residual -= 2.0 / 3.0
+    # Cover the residual with boxes sized FOR it, not by repeating radius 1.
+    # Variances add, so one pass of the largest box that fits takes most of it
+    # and the next takes most of the rest -- a handful of passes instead of
+    # `residual / (2/3)` of them, which reached ~105 for the warp shadow and
+    # made a corpus build take hours rather than minutes.
+    guard = 0
+    while residual >= 2.0 / 3.0 and guard < 8:
+        radius = int((np.sqrt(12.0 * residual + 1.0) - 1.0) / 2.0)
+        if radius < 1:
+            break
+        out = _blur_axis(_blur_axis(out.astype(np.int64), radius, 0), radius, 1).astype(np.float64)
+        residual -= ((2 * radius + 1) ** 2 - 1) / 12.0
+        guard += 1
     if residual > 0:
-        out = _tap3(out, residual / 2.0)
+        # A weight above 0.25 would make the centre tap negative.
+        out = _tap3(out, min(residual / 2.0, 0.25))
     return np.clip(out + 0.5, 0, 255).astype(np.uint8)
