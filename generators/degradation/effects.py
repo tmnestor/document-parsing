@@ -29,24 +29,39 @@ def _ramp(height: int, width: int, direction: int) -> np.ndarray:
     Args:
         height: Image height in pixels.
         width: Image width in pixels.
-        direction: Gradient direction in degrees; must be one of 0, 45, 90, 135, 180.
+        direction: Gradient direction in degrees; a multiple of 45, taken
+            modulo a full turn.
 
     Raises:
-        ValueError: If direction is not one of the supported values.
+        ValueError: If direction is not a multiple of 45.
     """
-    # Quarter-turn lookup: the YAML only ever declares 0, 45 or 90.
-    axes = {0: (1, 0), 45: (1, 1), 90: (0, 1), 135: (-1, 1), 180: (-1, 0)}
-    direction_normalized = int(direction) % 180
+    # Eighth-turn lookup over a FULL turn. It used to be taken modulo 180, which
+    # is not a symmetry of a gradient: 180 mapped to 0 and 270 to 90, so a tier
+    # asking for the reversed falloff silently got the original one while the
+    # docstring and the diagnostic both advertised 180 as valid. A gradient
+    # repeats every 360 degrees, not every 180, so the lookup covers all eight.
+    axes = {
+        0: (1, 0),
+        45: (1, 1),
+        90: (0, 1),
+        135: (-1, 1),
+        180: (-1, 0),
+        225: (-1, -1),
+        270: (0, -1),
+        315: (1, -1),
+    }
+    direction_normalized = int(direction) % 360
     if direction_normalized not in axes:
         supported = sorted(axes.keys())
         raise ValueError(
-            f"""What: direction={direction_normalized}° is not supported.
+            f"""What: direction={direction}° (={direction_normalized}° modulo a turn) is not
+      supported; only eighth-turns are.
 Where: config/degradation.yml, in the `paper-phase` LightingGradient entry.
-Expected: direction must be one of {supported}. Example:
-  - effect: LightingGradient
-    parameters:
-      direction: 90
-Recover: add `direction: 90` (or 0, 45, 135, 180) to the LightingGradient config."""
+Expected: direction must be one of {supported}, modulo 360. Example:
+  - augmentation: LightingGradient
+    max_brightness: 248
+    direction: 90
+Recover: round the `direction:` value to the nearest multiple of 45."""
         ) from None
     dx, dy = axes[direction_normalized]
     length = float(np.sqrt(float(dx * dx + dy * dy)))
@@ -145,7 +160,11 @@ class ShadowCast:
         # A uint8 mask, softened by the same integer blur the Gaussian
         # replacement uses, so no transcendental builds the falloff.
         mask = np.clip(ramp * opacity * 255.0 + 0.5, 0, 255).astype(np.uint8)
-        # radius_for_sigma returns 0 for small images (under ~12 px), but box_blur handles this.
+        # The radius floors to 0 below sigma 1.415, i.e. whenever max(height,
+        # width) is under about 71 px -- a test fixture, never a page. Real
+        # pages are thousands of pixels, so the quantisation that made the
+        # camera blur a no-op does not bite here: at 2000 px this asks for
+        # sigma 40 and gets radius 22.
         mask = box_blur(mask, radius_for_sigma(max(height, width) * 0.02))
 
         alpha = mask.astype(np.int32)[:, :, None]
