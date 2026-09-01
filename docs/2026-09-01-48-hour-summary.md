@@ -1,5 +1,26 @@
 # What shipped, 2026-08-31 to 2026-09-01
 
+## The corpora
+
+The corpus is 189 synthetic Australian business documents — 73 invoices, 55
+receipts and 61 bank statements — each a single pristine page image paired with
+a canonical Markdown transcript that the renderer emits at the moment it draws
+the page, so the label cannot drift from the pixels. That clean set is exported
+three ways: `parsing_<stamp>/` for full-page transcription (images,
+transcripts, OmniDocBench-shaped layout annotations, table HTML, and a hashed
+manifest), `extraction_<stamp>/` for information extraction (flat images plus
+document-level and line-item ground truth), and `degraded/`, which re-renders
+every page through two intake ladders — flatbed `scan` and phone `photo`, at
+light, moderate and heavy — for 1,134 damaged images. With the clean baseline
+that makes seven corpora and 1,323 images, every one carrying a
+`family`/`severity` label on its own manifest record and pooled into a single
+`ground_truth.jsonl`. The degraded pages reuse the clean transcripts byte for
+byte, since degradation changes how legible a page is and never what it says,
+so any score gap between clean and degraded is attributable to image quality
+alone.
+
+## What changed
+
 43 commits, `2cdf8dd..53ae125`.
 
 ## Degradation became a scored benchmark dimension (today)
