@@ -26,6 +26,8 @@ import cv2
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter
 
+from .kernels import box_blur, radius_for_sigma
+
 # The OpenCV the degraded corpora were built with. `warpPerspective` and
 # `GaussianBlur` are not bit-stable across major versions, so this is corpus
 # data, not a preference: a different build silently produces a different corpus
@@ -190,7 +192,11 @@ def warp_to_photo(image: Image.Image, geometry: dict, rng: np.random.Generator) 
     alpha = (warped[:, :, 3].astype(np.float32) / 255.0)[:, :, None]
 
     # Drop shadow under the page.
-    shadow = cv2.GaussianBlur(warped[:, :, 3], (0, 0), max(w, h) * 0.02) * 0.45
+    # OpenCV's kernel construction uses std::exp, which is not portable across
+    # platforms (glibc vs Apple libm differ in the last bits). A three-pass box
+    # cascade approximates a Gaussian using only integer arithmetic.
+    sigma = max(w, h) * 0.02
+    shadow = box_blur(warped[:, :, 3], radius_for_sigma(sigma)) * 0.45
     offset = int(max(w, h) * 0.015)
     shadow = np.roll(np.roll(shadow, offset, axis=0), offset, axis=1)[:, :, None] / 255.0
     bg = bg * (1 - shadow) + np.array([25, 22, 20]) * shadow
