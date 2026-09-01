@@ -69,13 +69,13 @@ class LightingGradient:
         self.max_brightness = int(max_brightness)
         self.direction = int(direction)
 
-    def __call__(self, image: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    def __call__(self, image: np.ndarray, _rng: np.random.Generator) -> np.ndarray:
         """Apply the gradient effect to the image.
 
         Args:
             image: Input image array.
-            rng: Seeded random generator (unused; present for signature parity with
-                ShadowCast and InkBleed, which sample this generator).
+            _rng: Seeded random generator (unused; this effect samples nothing, but
+                the parameter exists for signature parity with ShadowCast and InkBleed).
 
         Returns:
             Degraded image with the same shape and dtype as the input.
