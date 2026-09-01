@@ -96,10 +96,30 @@ families:
           - augmentation: InkBleed
             intensity: [0.02, 0.06]
             kernel: 3
+            doc_types: [bank_statements, receipts, invoices]
         paper:
           - augmentation: LightingGradient
             max_brightness: 255
             direction: 90
+            doc_types: [bank_statements, receipts, invoices]
+          # THERMAL FADE, RECEIPTS ONLY. Thermal coating reacts to heat and UV,
+          # then moisture, skin oils and friction, and fades unevenly rather
+          # than as a uniform contrast loss -- see
+          # docs/research/2026-09-02-degradation-candidates.md §5.1. It has no
+          # meaning on a laser/inkjet bank statement or invoice, which is what
+          # `doc_types: [receipts]` gates. LAST in this list on purpose: every
+          # earlier effect's draws stay exactly what they were before this
+          # effect existed. `patterns:` is sampled per page rather than fixed
+          # per tier, because real receipts fade several different ways --
+          # uniformly with storage heat, or heavier toward whichever edge stuck
+          # out of a wallet -- and a whole tier fading identically would read
+          # as synthetic. The same five patterns are declared everywhere below;
+          # both the strength ranges and this set are a first guess, not yet
+          # tuned against any model's scores.
+          - augmentation: ThermalFade
+            strength: [0.10, 0.25]
+            patterns: [uniform, top, bottom, left, right]
+            doc_types: [receipts]
         marks: []          # a well-maintained scanner leaves no roller marks
         geometry:
           mode: skew
@@ -122,10 +142,18 @@ families:
           - augmentation: InkBleed
             intensity: [0.14, 0.28]
             kernel: 3
+            doc_types: [bank_statements, receipts, invoices]
         paper:
           - augmentation: LightingGradient
             max_brightness: 248
             direction: 45
+            doc_types: [bank_statements, receipts, invoices]
+          # Thermal fade, receipts only -- see the note on scan-light. LAST in
+          # this list, same reason. First guess, not yet tuned.
+          - augmentation: ThermalFade
+            strength: [0.25, 0.45]
+            patterns: [uniform, top, bottom, left, right]
+            doc_types: [receipts]
         marks:
           - mark: roller_streaks
             count: [3, 6]
@@ -155,10 +183,18 @@ families:
           - augmentation: InkBleed
             intensity: [0.26, 0.44]
             kernel: 5
+            doc_types: [bank_statements, receipts, invoices]
         paper:
           - augmentation: LightingGradient
             max_brightness: 240
             direction: 45
+            doc_types: [bank_statements, receipts, invoices]
+          # Thermal fade, receipts only -- see the note on scan-light. LAST in
+          # this list, same reason. First guess, not yet tuned.
+          - augmentation: ThermalFade
+            strength: [0.45, 0.65]
+            patterns: [uniform, top, bottom, left, right]
+            doc_types: [receipts]
         marks:
           - mark: roller_streaks
             count: [5, 10]
@@ -189,10 +225,19 @@ families:
           - augmentation: InkBleed
             intensity: [0.05, 0.15]
             kernel: 3
+            doc_types: [bank_statements, receipts, invoices]
         paper:
           - augmentation: LightingGradient
             max_brightness: 255
             direction: 90
+            doc_types: [bank_statements, receipts, invoices]
+          # THERMAL FADE, RECEIPTS ONLY -- see the note on scan-light for what
+          # this models and why it is gated. LAST in this list, same reason.
+          # First guess, not yet tuned against any model's scores.
+          - augmentation: ThermalFade
+            strength: [0.10, 0.25]
+            patterns: [uniform, top, bottom, left, right]
+            doc_types: [receipts]
         marks: []          # a flat, unfolded page
         geometry:
           mode: warp
@@ -211,13 +256,22 @@ families:
           - augmentation: InkBleed
             intensity: [0.15, 0.30]
             kernel: 5
+            doc_types: [bank_statements, receipts, invoices]
         paper:
           - augmentation: LightingGradient
             max_brightness: 245
             direction: 45
+            doc_types: [bank_statements, receipts, invoices]
           - augmentation: ShadowCast
             side: bottom
             opacity: [0.25, 0.45]
+            doc_types: [bank_statements, receipts, invoices]
+          # Thermal fade, receipts only -- see the note on scan-light. LAST in
+          # this list, same reason. First guess, not yet tuned.
+          - augmentation: ThermalFade
+            strength: [0.25, 0.45]
+            patterns: [uniform, top, bottom, left, right]
+            doc_types: [receipts]
         marks: []          # still unfolded; the damage here is light and angle
         geometry:
           mode: warp
@@ -238,10 +292,12 @@ families:
           - augmentation: InkBleed
             intensity: [0.25, 0.45]
             kernel: 5
+            doc_types: [bank_statements, receipts, invoices]
         paper:
           - augmentation: LightingGradient
             max_brightness: 235
             direction: 45
+            doc_types: [bank_statements, receipts, invoices]
           - augmentation: ShadowCast
             # STRICTLY DARKER THAN MODERATE'S [0.25, 0.45]. It used to be
             # [0.22, 0.38], which made the hardest rung the better-lit one:
@@ -255,6 +311,13 @@ families:
             # is not severity, and only opacity carries the rung.
             side: top
             opacity: [0.35, 0.55]
+            doc_types: [bank_statements, receipts, invoices]
+          # Thermal fade, receipts only -- see the note on scan-light. LAST in
+          # this list, same reason. First guess, not yet tuned.
+          - augmentation: ThermalFade
+            strength: [0.45, 0.65]
+            patterns: [uniform, top, bottom, left, right]
+            doc_types: [receipts]
         marks:
           - mark: fold_ridges
             count: [2, 3]

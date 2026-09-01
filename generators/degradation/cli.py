@@ -300,6 +300,7 @@ def degrade(
                     Image.open(corpus / record["image"]),
                     tier,
                     page_seed(stem, tier),
+                    record["doc_type"],
                 )
                 degraded.save(target / "images" / image_name, quality=95, subsampling=0)
 

@@ -82,19 +82,22 @@ def page_seed(stem: str, tier: Tier) -> int:
     return int.from_bytes(hashlib.sha256(key).digest()[:4], "big") & 0x7FFF_FFFF
 
 
-def degrade_page(image: "Image.Image", tier: Tier, seed: int) -> "Image.Image":
+def degrade_page(image: "Image.Image", tier: Tier, seed: int, doc_type: str) -> "Image.Image":
     """Degrade one clean render to one tier's severity.
 
     Args:
         image: The clean rendered page.
         tier: The severity tier to apply.
         seed: Seed for this (page, tier) pair — see `page_seed`.
+        doc_type: The page's document type, e.g. "receipts". Gates document-type
+            specific effects such as `ThermalFade` — see `apply_effects`.
 
     Returns:
         An RGB frame of the page as the tier's intake channel would deliver it.
 
     Raises:
-        AugmentationError: The tier names an unregistered augmentation.
+        AugmentationError: The tier names an unregistered augmentation, or an
+            ink/paper spec has no `doc_types:` key.
         MarkError: The tier names an unregistered mark.
     """
     import numpy as np
@@ -113,7 +116,7 @@ def degrade_page(image: "Image.Image", tier: Tier, seed: int) -> "Image.Image":
     # avoid.
     check_opencv()
 
-    augmented = apply_effects(image, tier, seed)
+    augmented = apply_effects(image, tier, seed, doc_type)
     rng = np.random.default_rng(seed)
 
     # Our own paper effects, after the ink and paper effects phase and still on
