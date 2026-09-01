@@ -23,10 +23,30 @@ def _ramp(height: int, width: int, direction: int) -> np.ndarray:
     non-integer operation is the `sqrt` that normalises the direction vector,
     which is exact. Degrees are turned into a direction with a small exact
     lookup rather than `cos`/`sin`, which are not portable.
+
+    Args:
+        height: Image height in pixels.
+        width: Image width in pixels.
+        direction: Gradient direction in degrees; must be one of 0, 45, 90, 135, 180.
+
+    Raises:
+        ValueError: If direction is not one of the supported values.
     """
     # Quarter-turn lookup: the YAML only ever declares 0, 45 or 90.
     axes = {0: (1, 0), 45: (1, 1), 90: (0, 1), 135: (-1, 1), 180: (-1, 0)}
-    dx, dy = axes.get(int(direction) % 180, (1, 1))
+    direction_normalized = int(direction) % 180
+    if direction_normalized not in axes:
+        supported = sorted(axes.keys())
+        raise ValueError(
+            f"""What: direction={direction_normalized}° is not supported.
+Where: config/degradation.yml, in the `paper-phase` LightingGradient entry.
+Expected: direction must be one of {supported}. Example:
+  - effect: LightingGradient
+    parameters:
+      direction: 90
+Recover: add `direction: 90` (or 0, 45, 135, 180) to the LightingGradient config."""
+        ) from None
+    dx, dy = axes[direction_normalized]
     length = float(np.sqrt(float(dx * dx + dy * dy)))
     ys = np.arange(height, dtype=np.float64).reshape(-1, 1)
     xs = np.arange(width, dtype=np.float64).reshape(1, -1)
@@ -50,6 +70,16 @@ class LightingGradient:
         self.direction = int(direction)
 
     def __call__(self, image: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+        """Apply the gradient effect to the image.
+
+        Args:
+            image: Input image array.
+            rng: Seeded random generator (unused; present for signature parity with
+                ShadowCast and InkBleed, which sample this generator).
+
+        Returns:
+            Degraded image with the same shape and dtype as the input.
+        """
         height, width = image.shape[:2]
         ramp = _ramp(height, width, self.direction)
         # Linear falloff from the ceiling down to 78% of it: a multiplicative
