@@ -50,6 +50,7 @@ _RENDERERS = {
 _DEFAULT_CONFIG = Path("config/generation_config.yml")
 _DEFAULT_POLICY = Path("config/serialisation.yml")
 _DEFAULT_PROMPT = Path("config/prompt.md")
+_DEFAULT_SUBMISSION = Path("config/submission.md")
 
 
 def _validate_layouts(layouts: dict, *, doc_type: str, layout_path: str) -> list[str]:
@@ -445,6 +446,9 @@ def export(
     config: Annotated[Path, typer.Option(help="Path to generation_config.yml")] = _DEFAULT_CONFIG,
     policy: Annotated[Path, typer.Option("--policy", help="Path to serialisation.yml")] = _DEFAULT_POLICY,
     prompt: Annotated[Path, typer.Option("--prompt", help="Path to prompt.md")] = _DEFAULT_PROMPT,
+    submission: Annotated[
+        Path, typer.Option("--submission", help="Path to submission.md")
+    ] = _DEFAULT_SUBMISSION,
     derived: Annotated[
         Path | None, typer.Option("--derived", help="Override the configured derived directory.")
     ] = None,
@@ -458,9 +462,10 @@ def export(
     """Assemble the dated deliverable directory (design §6.1).
 
     Copies images and transcripts verbatim — it never re-renders or
-    re-serialises — and adds the three artifacts that make the corpus
+    re-serialises — and adds the four artifacts that make the corpus
     interpretable away from this checkout: a hashed manifest, a copy of the
-    policy that produced the transcripts, and the prompt they assume.
+    policy that produced the transcripts, the prompt they assume, and the
+    contract a team follows to submit a run against it.
 
     Raises:
         typer.Exit: With code 1 when a needed artifact is missing.
@@ -478,6 +483,7 @@ def export(
             transcripts_dir=derived_dir / "transcripts",
             policy_path=policy,
             prompt_path=prompt,
+            submission_path=submission,
             target=target,
             date_stamp=date_stamp,
         )

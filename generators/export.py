@@ -332,6 +332,7 @@ never recovered by OCR or by hand.
 | `manifest.jsonl` | One row per case: paths, doc_type, hashes, layout, tables, family, severity. |
 | `prompt.md` | The prompt these transcripts assume. |
 | `serialisation.yml` | The exact policy that produced these transcripts. |
+| `submission.md` | **Read before running.** What a run must contain to be scored. Assumes no toolchain. |
 {multi_table_note}
 Every manifest record's `family`/`severity` name the intake channel and
 degradation tier that produced its image — `"clean"`/`"none"` for this
@@ -486,6 +487,7 @@ def export_corpus(
     transcripts_dir: Path,
     policy_path: Path,
     prompt_path: Path,
+    submission_path: Path,
     target: Path,
     date_stamp: str,
 ) -> Path:
@@ -503,6 +505,9 @@ def export_corpus(
         transcripts_dir: Directory holding the serialised transcripts.
         policy_path: The `serialisation.yml` that produced them.
         prompt_path: The prompt these transcripts assume.
+        submission_path: The contract a team follows to submit a run against
+            this corpus. Ships with the data because a submitting team has this
+            directory and not this checkout.
         target: Directory to create the export inside.
         date_stamp: Corpus date, YYYYMMDD.
 
@@ -521,6 +526,7 @@ def export_corpus(
     for label, path, command in (
         ("serialisation policy", policy_path, "serialise"),
         ("prompt", prompt_path, "serialise"),
+        ("submission contract", submission_path, "serialise"),
     ):
         if not path.exists():
             raise _missing(label, path, recover_command=command)
@@ -618,6 +624,10 @@ def export_corpus(
     # matched pair with the transcripts beside it.
     shutil.copy2(policy_path, root / "serialisation.yml")
     shutil.copy2(prompt_path, root / "prompt.md")
+    # Teams submitting against this corpus run their own models, their own
+    # prompts and their own code. The contract they follow therefore travels
+    # with the data, for the same reason the prompt and the policy do.
+    shutil.copy2(submission_path, root / "submission.md")
     (root / "README.md").write_text(
         readme_text(
             date_stamp,
