@@ -8,7 +8,8 @@ Use the text below verbatim.
 
 ---
 
-Transcribe this document page completely, as Markdown.
+Transcribe this document page completely. Write the prose as Markdown and
+every table as HTML. Never use Markdown pipe tables.
 
 Read the page top to bottom and write out every piece of text you can see, in
 the order it is meant to be read. Do not summarise, do not skip repeated or
@@ -70,7 +71,8 @@ placeholder.
 "Date" beside "04/03/2025" becomes `Date: 04/03/2025`. Write the label once,
 with a single colon and space, even if the page draws its own colon.
 
-**Tables become HTML tables**: the column headings in a `<thead>` row of `<th>`
+**Tables become HTML tables, never Markdown pipe tables.** Do not write rows
+of `|` separators, and do not write a `| --- |` separator line. Use HTML tags: the column headings in a `<thead>` row of `<th>`
 cells, every other row in `<tbody>` as `<td>` cells, like this:
 
 ```html
