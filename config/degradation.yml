@@ -94,7 +94,7 @@ families:
           # ladder has to be opened downward, on moderate and heavy, not
           # upward on light.
           - augmentation: InkBleed
-            intensity: [0.02, 0.06]
+            intensity: [0.08, 0.16]
             kernel: 3
             doc_types: [bank_statements, receipts, invoices]
         paper:
@@ -123,12 +123,12 @@ families:
         marks: []          # a well-maintained scanner leaves no roller marks
         geometry:
           mode: skew
-          rotation_deg: [-0.8, 0.8]
+          rotation_deg: [-1.8, 1.8]
           margin: [0.01, 0.02]
         camera:
-          blur: [0.05, 0.15]
+          blur: [0.30, 0.60]
           noise_sigma: [1, 2]
-          jpeg: [92, 98]
+          jpeg: [80, 90]
 
       - name: moderate
         suffix: scan2
@@ -156,17 +156,17 @@ families:
             doc_types: [receipts]
         marks:
           - mark: roller_streaks
-            count: [3, 6]
+            count: [4, 8]
             width: [4, 11]
-            strength: [0.07, 0.15]
+            strength: [0.12, 0.24]
         geometry:
           mode: skew
-          rotation_deg: [-2.0, 2.0]
+          rotation_deg: [-3.2, 3.2]
           margin: [0.01, 0.03]
         camera:
-          blur: [0.5, 0.95]
+          blur: [0.90, 1.50]
           noise_sigma: [3, 5]
-          jpeg: [62, 78]
+          jpeg: [55, 70]
 
       - name: heavy
         suffix: scan3
@@ -181,7 +181,7 @@ families:
           # above: readable with effort. photo-heavy already runs blur to 2.0
           # and stays legible, so 1.8 here is inside proven ground.
           - augmentation: InkBleed
-            intensity: [0.26, 0.44]
+            intensity: [0.34, 0.52]
             kernel: 5
             doc_types: [bank_statements, receipts, invoices]
         paper:
@@ -197,17 +197,17 @@ families:
             doc_types: [receipts]
         marks:
           - mark: roller_streaks
-            count: [5, 10]
-            width: [8, 22]
-            strength: [0.16, 0.32]
+            count: [7, 14]
+            width: [10, 28]
+            strength: [0.26, 0.45]
         geometry:
           mode: skew
-          rotation_deg: [-3.5, 3.5]
+          rotation_deg: [-5.0, 5.0]
           margin: [0.02, 0.04]
         camera:
-          blur: [1.0, 1.8]
+          blur: [1.60, 2.60]
           noise_sigma: [6, 10]
-          jpeg: [32, 50]
+          jpeg: [25, 42]
 
   # ------------------------------------------------------------------ photo
   photo:
