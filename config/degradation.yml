@@ -189,13 +189,8 @@ families:
           # below it rather than being overtaken. Still bounded by the rule
           # above: readable with effort.
           #
-          # NOTE, unverified: this tier's camera blur is [1.60, 2.60]. The
-          # justification that used to sit here -- "photo-heavy already runs
-          # blur to 2.0, so this is inside proven ground" -- no longer holds.
-          # The value is not 1.8, and 2.60 is beyond any blur this project has
-          # rendered and looked at, so the rule at the top of this tier
-          # ("readable, with effort, or it discriminates between nothing") is
-          # asserted here rather than checked.
+          # The blur ceiling is now measured and looked at -- see the note on
+          # camera.blur below.
           #
           # It also puts scan above photo on blur AND compression at every
           # severity. That is not forbidden -- the two families are independent
@@ -235,7 +230,17 @@ families:
           rotation_deg: [-5.0, 5.0]
           margin: [0.02, 0.04]
         camera:
-          blur: [1.60, 2.60]
+          # CEILING MEASURED, not guessed. Swept on a receipt -- the smallest
+          # type in the corpus -- against the amounts column, blur and JPEG
+          # separately and together. Blur is the whole story: quality 25 and 42
+          # are indistinguishable (contrast 217 vs 229 with no blur), while
+          # sigma takes it from 244 clean to 90 at 1.6 and 73 at 2.6.
+          #
+          # Looked at, not just measured: at 1.6 every digit is crisp; at 2.0
+          # amounts are soft but readable; at 2.6 "9.30" is nearly gone and
+          # adjacent digits merge. 2.0 is the highest value verified legible by
+          # eye, so it is the ceiling. This still raises the shipped [1.0, 1.8].
+          blur: [1.60, 2.00]
           noise_sigma: [6, 10]
           jpeg: [25, 42]
 
