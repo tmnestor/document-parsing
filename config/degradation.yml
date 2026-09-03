@@ -178,8 +178,26 @@ families:
         ink:
           # MOVED DOWN with moderate, to keep the top of the ladder a real step
           # below it rather than being overtaken. Still bounded by the rule
-          # above: readable with effort. photo-heavy already runs blur to 2.0
-          # and stays legible, so 1.8 here is inside proven ground.
+          # above: readable with effort.
+          #
+          # NOTE, unverified: this tier's camera blur is [1.60, 2.60]. The
+          # justification that used to sit here -- "photo-heavy already runs
+          # blur to 2.0, so this is inside proven ground" -- no longer holds.
+          # The value is not 1.8, and 2.60 is beyond any blur this project has
+          # rendered and looked at, so the rule at the top of this tier
+          # ("readable, with effort, or it discriminates between nothing") is
+          # asserted here rather than checked.
+          #
+          # It also puts scan above photo on blur AND compression at every
+          # severity. That is not forbidden -- the two families are independent
+          # ladders by design, not one scale -- but it does invert how they have
+          # ranked until now: measured pre-retune, scan-heavy scored 0.7734
+          # attributable against photo-heavy's 0.4296. Expect that gap to close
+          # or reverse, and intend it rather than discover it.
+          #
+          # tests/test_degradation_ladder_monotonic.py compares rungs WITHIN a
+          # family, so nothing catches this. Render this tier and look at it
+          # before it is baked into a corpus other teams consume.
           - augmentation: InkBleed
             intensity: [0.34, 0.52]
             kernel: 5
