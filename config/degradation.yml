@@ -155,10 +155,19 @@ families:
             patterns: [uniform, top, bottom, left, right]
             doc_types: [receipts]
         marks:
+          # ONE PAGE IN TWENTY. A dirty drum is an uncommon fault, and this used
+          # to mark every page: the streaks were the most visible damage on a
+          # rendered scan, so the ladder's severity rested on a condition most
+          # real scans do not have, and any quality floor found under it would
+          # have been a floor for dirty drums rather than for scanning. The
+          # tier's difficulty should come from what every scan has -- lamp
+          # falloff, focus, sensor noise, compression, skew -- and a streaked
+          # page should appear at about the rate it appears in an intake queue.
           - mark: roller_streaks
             count: [4, 8]
             width: [4, 11]
             strength: [0.12, 0.24]
+            prevalence: 0.05
         geometry:
           mode: skew
           rotation_deg: [-3.2, 3.2]
@@ -214,10 +223,13 @@ families:
             patterns: [uniform, top, bottom, left, right]
             doc_types: [receipts]
         marks:
+          # One page in twenty, as on scan-moderate -- see the note there. A
+          # tired device streaks harder when it streaks, not more often.
           - mark: roller_streaks
             count: [7, 14]
             width: [10, 28]
             strength: [0.26, 0.45]
+            prevalence: 0.05
         geometry:
           mode: skew
           rotation_deg: [-5.0, 5.0]
@@ -337,9 +349,16 @@ families:
             patterns: [uniform, top, bottom, left, right]
             doc_types: [receipts]
         marks:
+          # 1.0 preserves what this did before `prevalence` existed: every
+          # photo-heavy page is creased. Unlike a dirty drum, a fold is a
+          # property of the document rather than of a faulty device -- a receipt
+          # carried in a wallet or a pocket really is folded -- so marking every
+          # page of the tier that models a worn submission is defensible. It is
+          # stated rather than assumed, and is worth revisiting deliberately.
           - mark: fold_ridges
             count: [2, 3]
             strength: [0.06, 0.14]
+            prevalence: 1.0
         geometry:
           mode: warp
           foreshorten: [0.06, 0.11]

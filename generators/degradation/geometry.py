@@ -485,8 +485,88 @@ def apply_marks(image: Image.Image, tier, rng: np.random.Generator) -> Image.Ima
                 "  Recover:  use a registered mark, or add the function to MARKS in "
                 "generators/degradation/geometry.py."
             )
-        result = function(result, spec, rng)
+        result = _apply_one_mark(result, function, spec, rng, tier=tier, where=where)
     return result
+
+
+def _prevalence_of(spec: dict, *, tier, where: str) -> float:
+    """How often this mark occurs, as a fraction of pages.
+
+    Required, like every other key in this file. A dirty scanner drum is
+    uncommon; painting roller streaks on every page made the scan ladder's
+    severity rest on a fault most real scans do not have, and any quality floor
+    found under it would be a floor for that fault rather than for scanning. An
+    omitted key is therefore an error rather than an implied 1.0 -- reading the
+    YAML has to answer how often the mark occurs.
+
+    Args:
+        spec: One `marks:` entry.
+        tier: The tier it belongs to, named in diagnostics.
+        where: Dotted path to the entry, for the diagnostic.
+
+    Returns:
+        The declared prevalence, in [0, 1].
+
+    Raises:
+        MarkError: The key is absent, not a number, or outside [0, 1].
+    """
+    example = (
+        "              {mark: roller_streaks, count: [7, 14], width: [10, 28], "
+        "strength: [0.26, 0.45], prevalence: 0.05}"
+    )
+    if "prevalence" not in spec:
+        raise MarkError(
+            "Invalid mark spec.\n"
+            f"  What:     the '{spec.get('mark')}' entry of tier '{tier.label}' declares no "
+            "'prevalence:', so how often it occurs is unstated.\n"
+            f"  Where:    config/degradation.yml -> {where}\n"
+            "  Expected: a fraction of pages between 0 and 1, e.g.\n"
+            f"{example}\n"
+            "  Recover:  add 'prevalence:' to the entry. Use 1.0 to mark every page, "
+            "which is what this used to do implicitly."
+        )
+
+    value = spec["prevalence"]
+    if isinstance(value, bool) or not isinstance(value, int | float) or not 0.0 <= value <= 1.0:
+        raise MarkError(
+            "Invalid mark spec.\n"
+            f"  What:     the '{spec.get('mark')}' entry of tier '{tier.label}' declares "
+            f"prevalence {value!r}, which is not a fraction between 0 and 1.\n"
+            f"  Where:    config/degradation.yml -> {where}\n"
+            "  Expected: a number in [0, 1] -- the fraction of pages carrying this mark, "
+            "e.g.\n"
+            f"{example}\n"
+            "  Recover:  replace it with a number in that range; 0.05 is one page in twenty."
+        )
+    return float(value)
+
+
+def _apply_one_mark(
+    image: Image.Image, function, spec: dict, rng: np.random.Generator, *, tier, where: str
+) -> Image.Image:
+    """Paint one mark on this page, or not, according to its prevalence.
+
+    **The mark's parameters are drawn either way.** Skipping the draws would make
+    every downstream sampled value -- blur, noise, JPEG quality -- depend on
+    whether this page happened to win the coin, so two pages differing only in
+    their streaks would differ in everything after them too. Drawing regardless
+    keeps the coin's effect confined to what it is about.
+
+    Args:
+        image: The page so far.
+        function: The registered mark implementation.
+        spec: Its declared parameters.
+        rng: Seeded generator; all randomness is drawn from it.
+        tier: The tier, named in diagnostics.
+        where: Dotted path to the entry, for diagnostics.
+
+    Returns:
+        The page, marked or untouched.
+    """
+    prevalence = _prevalence_of(spec, tier=tier, where=where)
+    occurs = rng.random() < prevalence
+    marked = function(image, spec, rng)
+    return marked if occurs else image
 
 
 def apply_photometrics(image: Image.Image, camera: dict, rng: np.random.Generator) -> Image.Image:
